@@ -1,0 +1,21 @@
+<ion-view view-title="OTA">
+  <!-- do you want padding? -->
+  <ion-content class="padding">
+
+    <!-- content goes here -->
+    <button type="input" class="button button-positive" ng-click="vm.startScan()">Scan</button>
+    <button type="input" class="button button-positive" ng-click="vm.stopScan()">Stop</button>
+    <ion-list>
+      <ion-item
+          class="item-remove-animate item-avatar item-icon-right"
+          type="item-text-wrap"
+          ui-sref="main.listDetail"
+          ng-repeat="device in vm.devices track by device.address">
+        <h2>{{device.name}}</h2>
+        <p>{{device.address}}</p>
+        <p>{{device.rssi}}</p>
+      </ion-item>
+    </ion-list>
+
+  </ion-content>
+</ion-view>

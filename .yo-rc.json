@@ -1,0 +1,20 @@
+{
+  "generator-m-ionic": {
+    "answers": {
+      "appName": "Nano OTA",
+      "appId": "com.cantireinovations.nano.ota",
+      "ionicCss": true,
+      "bowerPackages": [
+        "localforage#~1.4.0"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "plugins": [
+        "cordova-plugin-device"
+      ],
+      "appModule": "nanoOta",
+      "ecosystems": []
+    }
+  }
+}
