@@ -7,13 +7,14 @@
     <button type="input" class="button button-positive" ng-click="vm.stopScan()">Stop</button>
     <ion-list>
       <ion-item
-          class="item-remove-animate item-avatar item-icon-right"
+          ng-repeat="device in vm.devices track by device.address"
+          class="item-remove-animate item-icon-right"
           type="item-text-wrap"
-          ui-sref="main.listDetail"
-          ng-repeat="device in vm.devices track by device.address">
+          ui-sref="main.otaDevice({ device: device })">
         <h2>{{device.name}}</h2>
         <p>{{device.address}}</p>
         <p>{{device.rssi}}</p>
+        <i class="icon ion-chevron-right icon-accessory"></i>
       </ion-item>
     </ion-list>
 

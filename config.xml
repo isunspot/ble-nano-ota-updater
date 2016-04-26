@@ -26,4 +26,5 @@
     <engine name="android" spec="~5.1.1" />
     <plugin name="cordova-plugin-device" spec="~1.1.2" />
     <plugin name="cordova-plugin-bluetoothle" spec="~4.0.0" />
+    <preference name="AndroidPersistentFileLocation" value="Compatibility" />
 </widget>

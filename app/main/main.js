@@ -54,5 +54,17 @@ angular
                         controller: 'OtaCtrl as vm'
                     }
                 }
+            } )
+            .state( 'main.otaDevice', {
+                url: '/ota/device',
+                views: {
+                    'pageContent': {
+                        templateUrl: 'main/templates/ota-device.html',
+                        controller: 'OtaDeviceCtrl as vm'
+                    }
+                },
+                params: {
+                    device: null
+                }
             } );
     } );

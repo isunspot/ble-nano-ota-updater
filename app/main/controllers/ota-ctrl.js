@@ -2,10 +2,17 @@
 
 angular
     .module('main')
-    .controller('OtaCtrl', function($cordovaBluetoothLE, $log) {
+    .controller('OtaCtrl', function($cordovaBluetoothLE, $stateParams, $log) {
 
         var vm = this;
-        vm.devices = {};
+        // vm.devices = {};
+
+        vm.devices = {
+            'EC:E7:5E:FD:A9:66': {
+                address: 'EC:E7:5E:FD:A9:66',
+                name: 'Test Device'
+            }
+        };
 
         vm.initialize = function() {
 
@@ -23,6 +30,8 @@ angular
         };
 
         vm.startScan = function() {
+
+            vm.devices = {};
 
             var params = {
                 services: [],
@@ -61,19 +70,17 @@ angular
         };
 
         function addDevice(obj) {
-            $log.log(1);
+
             if( obj.status === 'scanStarted' ) {
                 return;
             }
 
-            $log.log(2);
             /*
             if( vm.devices[obj.address] !== undefined ) {
                 return;
             }
             */
 
-            $log.log(3);
             obj.services = {};
             vm.devices[obj.address] = obj;
 
