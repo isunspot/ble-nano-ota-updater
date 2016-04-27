@@ -2,7 +2,8 @@
   "extends": "../.eslintrc",
   "env": {
     "node": false,
-    "browser": true
+    "browser": true,
+    "es6": true
   },
   "globals": {
     "angular": true,
