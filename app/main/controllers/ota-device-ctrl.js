@@ -6,15 +6,16 @@ angular
 
         function HexFileInputStream( fileBuf ) {
 
-            var LINE_LENGTH = 128;
+            this.LINE_LENGTH = 128;
 
             this.fileBuf = fileBuf;
             this.pos = 0;
             this.available = this.calculateImageSize();
-            this.localBuf = new Array( LINE_LENGTH );
-            this.localPos = LINE_LENGTH;    // we are at the end of the local buffer, new one must be obtained
-            this.lastAddress = 0;
+            this.localBuf = new Array( this.LINE_LENGTH );
+            this.localPos = this.LINE_LENGTH;    // we are at the end of the local buffer, new one must be obtained
             this.size = this.localBuf.length;
+            this.lastAddress = 0;
+            this.bytesRead = 0;
 
             this.reset();
         }
@@ -22,7 +23,7 @@ angular
         HexFileInputStream.prototype.reset = function() {
             this.pos = 0;
             this.bytesRead = 0;
-            this.localPos = 0;
+            this.localPos = this.LINE_LENGTH;
         };
 
         HexFileInputStream.prototype.checkComma = function( symbol ) {
@@ -484,6 +485,8 @@ angular
                             return sendNextPacket();
                         }
 
+                        $log.log( 'Packets sent: ' + packetsSent );
+
                         var time = ( Date.now() - startTime ) / 1000;
                         $log.log( 'Transmission time: ' + time + 's' );
 
@@ -491,6 +494,7 @@ angular
                     } );
             };
 
+            inputStream.reset();
             return sendNextPacket();
         };
 
