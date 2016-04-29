@@ -2,237 +2,241 @@
 
 angular
     .module('main')
-    .controller('OtaDeviceCtrl', function($cordovaBluetoothLE, $stateParams, $log, $timeout, $q, Constants) {
+    .controller('OtaDeviceCtrl', function($cordovaBluetoothLE, $log, $scope, $stateParams, $timeout) {
+
+        var LINE_LENGTH = 128;
 
         function HexFileInputStream( fileBuf ) {
 
-            this.LINE_LENGTH = 128;
+            this._fileBuf = fileBuf;
+            this._pos = 0;
+            this._localBuf = new Array( LINE_LENGTH );
+            this._localPos = LINE_LENGTH;    // we are at the end of the local buffer, new one must be obtained
+            this._size = this._localBuf.length;
+            this._lastAddress = 0;
+            this._bytesRead = 0;
 
-            this.fileBuf = fileBuf;
-            this.pos = 0;
-            this.available = this.calculateImageSize();
-            this.localBuf = new Array( this.LINE_LENGTH );
-            this.localPos = this.LINE_LENGTH;    // we are at the end of the local buffer, new one must be obtained
-            this.size = this.localBuf.length;
-            this.lastAddress = 0;
-            this.bytesRead = 0;
+            this.available = this._calculateImageSize();
 
             this.reset();
         }
 
-        HexFileInputStream.prototype.reset = function() {
-            this.pos = 0;
-            this.bytesRead = 0;
-            this.localPos = this.LINE_LENGTH;    // we are at the end of the local buffer, new one must be obtained
-        };
+        HexFileInputStream.prototype = {
 
-        HexFileInputStream.prototype.checkComma = function( symbol ) {
+            reset: function() {
+                this._pos = 0;
+                this._bytesRead = 0;
+                this._localPos = LINE_LENGTH;    // we are at the end of the local buffer, new one must be obtained
+            },
 
-            if( symbol !== 0x3A ) {    // ':'
-                throw new Error( 'Invalid HEX file' );
-            }
-        };
+            _checkComma: function( symbol ) {
 
-        HexFileInputStream.prototype.read = function() {
-            return this.fileBuf[ this.pos++ ];
-        };
-
-        HexFileInputStream.prototype.readByte = function() {
-
-            var first = parseInt( String.fromCharCode( this.read() ), 16 );
-            var second = parseInt( String.fromCharCode( this.read() ), 16 );
-
-            return first << 4 | second;
-        };
-
-        HexFileInputStream.prototype.readAddress = function() {
-            return this.readByte() << 8 | this.readByte();
-        };
-
-        HexFileInputStream.prototype.skip = function( count ) {
-            this.pos += count;
-        };
-
-        HexFileInputStream.prototype.calculateImageSize = function() {
-
-            this.reset();
-
-            var binSize = 0;
-
-            var b, lineSize, offset, type;
-            var lastBaseAddress = 0; // last Base Address, default 0
-            var lastAddress;
-
-            b = this.read();
-
-            while ( true ) {    // eslint-disable-line no-constant-condition
-
-                this.checkComma( b );
-
-                lineSize = this.readByte(); // reading the length of the data in this line
-                offset = this.readAddress();// reading the offset
-                type = this.readByte(); // reading the line type
-
-                switch ( type ) {
-                    case 0x01:
-                        // end of file
-                        return binSize;
-                    case 0x04:
-                        // extended linear address record
-                        /*
-                         * The HEX file may contain jump to different addresses. The MSB of LBA (Linear Base Address) is given using the line type 4.
-                         * We only support files where bytes are located together, no jumps are allowed. Therefore the newULBA may be only lastULBA + 1 (or any, if this is the first line of the HEX)
-                         */
-                        var newULBA = this.readAddress();
-
-                        if( binSize > 0 && newULBA !== (lastBaseAddress >> 16) + 1 ) {
-                            return binSize;
-                        }
-
-                        lastBaseAddress = newULBA << 16;
-                        this.skip( 2 ); // skip check sum
-                        break;
-                    case 0x02:
-                        // extended segment address record
-                        var newSBA = this.readAddress() << 4;
-
-                        if( binSize > 0 && (newSBA >> 16) !== (lastBaseAddress >> 16) + 1 ) {
-                            return binSize;
-                        }
-
-                        lastBaseAddress = newSBA;
-                        this.skip( 2 ); // skip check sum
-                        break;
-                    case 0x00:
-                        // data type line
-                        lastAddress = lastBaseAddress + offset;
-                        if( lastAddress >= 0x1000 ) { // we must skip all data from below last MBR address (default 0x1000) as those are the MBR. The Soft Device starts at the end of MBR (0x1000), the app and bootloader farther more
-                            binSize += lineSize;
-                        }
-                    // no break!
-                    default:    // eslint-disable-line no-fallthrough
-                        this.skip(lineSize * 2 /* 2 hex per one byte */ + 2 /* check sum */);
-                        break;
+                if( symbol !== 0x3A ) {    // ':'
+                    throw new Error( 'Invalid HEX file' );
                 }
+            },
 
-                // skip end of line
+            _read: function() {
+                return this._fileBuf[ this._pos++ ];
+            },
+
+            _readByte: function() {
+
+                var first = parseInt( String.fromCharCode( this._read() ), 16 );
+                var second = parseInt( String.fromCharCode( this._read() ), 16 );
+
+                return first << 4 | second;
+            },
+
+            _readAddress: function() {
+                return this._readByte() << 8 | this._readByte();
+            },
+
+            _skip: function( count ) {
+                this._pos += count;
+            },
+
+            _calculateImageSize: function() {
+
+                this.reset();
+
+                var binSize = 0;
+
+                var b, lineSize, offset, type;
+                var lastBaseAddress = 0; // last Base Address, default 0
+                var lastAddress;
+
+                b = this._read();
+
                 while ( true ) {    // eslint-disable-line no-constant-condition
 
-                    b = this.read();
+                    this._checkComma( b );
 
-                    if( b !== 0x0A && b !== 0x0D ) {
-                        break;
+                    lineSize = this._readByte(); // reading the length of the data in this line
+                    offset = this._readAddress();// reading the offset
+                    type = this._readByte(); // reading the line type
+
+                    switch ( type ) {
+                        case 0x01:
+                            // end of file
+                            return binSize;
+                        case 0x04:
+                            // extended linear address record
+                            /*
+                             * The HEX file may contain jump to different addresses. The MSB of LBA (Linear Base Address) is given using the line type 4.
+                             * We only support files where bytes are located together, no jumps are allowed. Therefore the newULBA may be only lastULBA + 1 (or any, if this is the first line of the HEX)
+                             */
+                            var newULBA = this._readAddress();
+
+                            if( binSize > 0 && newULBA !== (lastBaseAddress >> 16) + 1 ) {
+                                return binSize;
+                            }
+
+                            lastBaseAddress = newULBA << 16;
+                            this._skip( 2 ); // skip check sum
+                            break;
+                        case 0x02:
+                            // extended segment address record
+                            var newSBA = this._readAddress() << 4;
+
+                            if( binSize > 0 && (newSBA >> 16) !== (lastBaseAddress >> 16) + 1 ) {
+                                return binSize;
+                            }
+
+                            lastBaseAddress = newSBA;
+                            this._skip( 2 ); // skip check sum
+                            break;
+                        case 0x00:
+                            // data type line
+                            lastAddress = lastBaseAddress + offset;
+                            if( lastAddress >= 0x1000 ) { // we must skip all data from below last MBR address (default 0x1000) as those are the MBR. The Soft Device starts at the end of MBR (0x1000), the app and bootloader farther more
+                                binSize += lineSize;
+                            }
+                            // no break!
+                        default:    // eslint-disable-line no-fallthrough
+                            this._skip( lineSize * 2 /* 2 hex per one byte */ + 2 /* check sum */ );
+                            break;
+                    }
+
+                    // skip end of line
+                    while ( true ) {    // eslint-disable-line no-constant-condition
+
+                        b = this._read();
+
+                        if( b !== 0x0A && b !== 0x0D ) {
+                            break;
+                        }
                     }
                 }
-            }
-        };
+            },
 
-        HexFileInputStream.prototype.readLine = function() {
+            _readLine: function() {
 
-            // end of file reached
-            if( this.pos === -1 ) {
-                return 0;
-            }
+                // end of file reached
+                if( this._pos === -1 ) {
+                    return 0;
+                }
 
-            // temporary value
-            var b;
-            var lineSize, type, offset;
-            var address;
+                // temporary value
+                var b;
+                var lineSize, type, offset;
+                var address;
 
-            do {
-                // skip end of line
-                while ( true ) {    // eslint-disable-line no-constant-condition
-                    b = this.read();
+                do {
+                    // skip end of line
+                    while ( true ) {    // eslint-disable-line no-constant-condition
+                        b = this._read();
 
-                    if( b !== 0x0A && b !== 0x0D ) {
-                        break;
+                        if( b !== 0x0A && b !== 0x0D ) {
+                            break;
+                        }
+                    }
+
+                    /*
+                     * Each line starts with comma (':')
+                     * Data is written in HEX, so each 2 ASCII letters give one byte.
+                     * After the comma there is one byte (2 HEX signs) with line length (normally 10 -> 0x10 -> 16 bytes -> 32 HEX characters)
+                     * After that there is a 4 byte of an address. This part may be skipped.
+                     * There is a packet type after the address (1 byte = 2 HEX characters). 00 is the valid data. Other values can be skipped when
+                     * converting to BIN file.
+                     * Then goes n bytes of data followed by 1 byte (2 HEX chars) of checksum, which is also skipped in BIN file.
+                     */
+                    this._checkComma( b ); // checking the comma at the beginning
+                    lineSize = this._readByte(); // reading the length of the data in this line
+                    offset = this._readAddress();// reading the offset
+                    type = this._readByte(); // reading the line type
+
+                    // if the line type is no longer data type (0x00), we've reached the end of the file
+                    switch ( type ) {
+                        case 0x00:
+                            // data type
+                            if( this._lastAddress + offset < 0x1000 ) { // skip MBR
+                                type = -1; // some other than 0
+                                this._skip( lineSize * 2 /* 2 hex per one byte */ + 2 /* check sum */ );
+                            }
+                            break;
+                        case 0x01:
+                            // end of file
+                            this._pos = -1;
+                            return 0;
+                        case 0x02:
+                            // extended segment address
+                            address = this._readAddress() << 4;
+
+                            if( this._bytesRead > 0 && (address >> 16) !== (this._lastAddress >> 16) + 1 ) {
+                                return 0;
+                            }
+
+                            this._lastAddress = address;
+                            this._skip( 2 /* check sum */ );
+                            break;
+                        case 0x04:
+                            // extended linear address
+                            address = this._readAddress();
+
+                            if( this._bytesRead > 0 && address !== (this._lastAddress >> 16) + 1 ) {
+                                return 0;
+                            }
+
+                            this._lastAddress = address << 16;
+                            this._skip( 2 /* check sum */ );
+                            break;
+                        default:
+                            this._skip( lineSize * 2 /* 2 hex per one byte */ + 2 /* check sum */ );
+                            break;
+                    }
+                } while ( type !== 0 );
+
+                // otherwise read lineSize bytes or fill the whole buffer
+                for ( var i = 0; i < this._localBuf.length && i < lineSize; ++i ) {
+                    b = this._readByte();
+                    this._localBuf[ i ] = b;
+                }
+
+                this._skip( 2 ); // skip the checksum
+                this._localPos = 0;
+
+                return lineSize;
+            },
+
+            readPacket: function( buf ) {
+
+                var i = 0;
+
+                while ( i < buf.length ) {
+                    if( this._localPos < this._size ) {
+                        buf[ i++ ] = this._localBuf[ this._localPos++ ];
+                        continue;
+                    }
+
+                    this._bytesRead += this._size = this._readLine();
+                    if( this._size === 0 ) {
+                        break; // end of file reached
                     }
                 }
 
-                /*
-                 * Each line starts with comma (':')
-                 * Data is written in HEX, so each 2 ASCII letters give one byte.
-                 * After the comma there is one byte (2 HEX signs) with line length (normally 10 -> 0x10 -> 16 bytes -> 32 HEX characters)
-                 * After that there is a 4 byte of an address. This part may be skipped.
-                 * There is a packet type after the address (1 byte = 2 HEX characters). 00 is the valid data. Other values can be skipped when
-                 * converting to BIN file.
-                 * Then goes n bytes of data followed by 1 byte (2 HEX chars) of checksum, which is also skipped in BIN file.
-                 */
-                this.checkComma( b ); // checking the comma at the beginning
-                lineSize = this.readByte(); // reading the length of the data in this line
-                offset = this.readAddress();// reading the offset
-                type = this.readByte(); // reading the line type
-
-                // if the line type is no longer data type (0x00), we've reached the end of the file
-                switch ( type ) {
-                    case 0x00:
-                        // data type
-                        if( this.lastAddress + offset < 0x1000 ) { // skip MBR
-                            type = -1; // some other than 0
-                            this.skip( lineSize * 2 /* 2 hex per one byte */ + 2 /* check sum */ );
-                        }
-                        break;
-                    case 0x01:
-                        // end of file
-                        this.pos = -1;
-                        return 0;
-                    case 0x02:
-                        // extended segment address
-                        address = this.readAddress() << 4;
-
-                        if( this.bytesRead > 0 && (address >> 16) !== (this.lastAddress >> 16) + 1 ) {
-                            return 0;
-                        }
-
-                        this.lastAddress = address;
-                        this.skip( 2 /* check sum */ );
-                        break;
-                    case 0x04:
-                        // extended linear address
-                        address = this.readAddress();
-
-                        if( this.bytesRead > 0 && address !== (this.lastAddress >> 16) + 1 ) {
-                            return 0;
-                        }
-
-                        this.lastAddress = address << 16;
-                        this.skip( 2 /* check sum */ );
-                        break;
-                    default:
-                        this.skip( lineSize * 2 /* 2 hex per one byte */ + 2 /* check sum */ );
-                        break;
-                }
-            } while ( type !== 0 );
-
-            // otherwise read lineSize bytes or fill the whole buffer
-            for ( var i = 0; i < this.localBuf.length && i < lineSize; ++i ) {
-                b = this.readByte();
-                this.localBuf[ i ] = b;
+                return i;
             }
-
-            this.skip( 2 ); // skip the checksum
-            this.localPos = 0;
-
-            return lineSize;
-        };
-
-        HexFileInputStream.prototype.readPacket = function( buf ) {
-
-            var i = 0;
-
-            while ( i < buf.length ) {
-                if( this.localPos < this.size ) {
-                    buf[ i++ ] = this.localBuf[ this.localPos++ ];
-                    continue;
-                }
-
-                this.bytesRead += this.size = this.readLine();
-                if( this.size === 0 ) {
-                    break; // end of file reached
-                }
-            }
-
-            return i;
         };
 
         // ---------------------------------------------------------------------
@@ -247,442 +251,667 @@ angular
                 throw new Error( 'FilePath plugin not found' );
             }
 
-            this.device = device;
-            this.options = options || {};
-            this.subscriptionNotification = null;
-            this.subscriptionNotificationHandler = null;
+            this._device = device;
+            this._options = options || {};
 
-            this.LOG_LEVEL_NO_LOGS = 0;
-            this.LOG_LEVEL_DEBUG = 1;
-            this.LOG_LEVEL_INFO = 2;
-            this.LOG_LEVEL_ERROR = 3;
+            this._subscriptionNotificationHandler = null;
+            this._subscriptionNotificationTimeout = null;
 
-            this.GENERIC_ATTRIBUTE_SERVICE_UUID = '00001801-0000-1000-8000-00805f9b34fb';
-            this.SERVICE_CHANGED_UUID = '00002a05-0000-1000-8000-00805f9b34fb';
-            this.DFU_SERVICE_UUID = '00001530-1212-efde-1523-785feabcd123';
-            this.DFU_CONTROL_POINT_UUID = '00001531-1212-efde-1523-785feabcd123';
-            this.DFU_PACKET_UUID = '00001532-1212-efde-1523-785feabcd123';
-            this.DFU_VERSION_UUID = '00001534-1212-efde-1523-785feabcd123';
-
-            this.NUMBER_OF_PACKETS_BEFORE_NOTIF = 12;
-            this.MAX_PACKET_SIZE = 20;
-
-            this.DFU_STATUS_SUCCESS = 1;
-            this.DFU_STATUS_INVALID_STATE = 2;
-            this.DFU_STATUS_NOT_SUPPORTED = 3;
-            this.DFU_STATUS_DATA_SIZE_EXCEEDS_LIMIT = 4;
-            this.DFU_STATUS_CRC_ERROR = 5;
-            this.DFU_STATUS_OPERATION_FAILED = 6;
-
-            this.OP_CODE_START_DFU_KEY = 0x01; // 1
-            this.OP_CODE_INIT_DFU_PARAMS_KEY = 0x02; // 2
-            this.OP_CODE_RECEIVE_FIRMWARE_IMAGE_KEY = 0x03; // 3
-            this.OP_CODE_VALIDATE_KEY = 0x04; // 4
-            this.OP_CODE_ACTIVATE_AND_RESET_KEY = 0x05; // 5
-            this.OP_CODE_RESET_KEY = 0x06; // 6
-            this.OP_CODE_PACKET_RECEIPT_NOTIF_REQ_KEY = 0x08; // 8
-            this.OP_CODE_RESPONSE_CODE_KEY = 0x10; // 16
-            this.OP_CODE_PACKET_RECEIPT_NOTIF_KEY = 0x11; // 17
-
-            this.OP_CODE_START_DFU = [ this.OP_CODE_START_DFU_KEY, 0x04 ]; // always application
-            this.OP_CODE_INIT_DFU_PARAMS_START = [ this.OP_CODE_INIT_DFU_PARAMS_KEY, 0x00 ];
-            this.OP_CODE_INIT_DFU_PARAMS_COMPLETE = [ this.OP_CODE_INIT_DFU_PARAMS_KEY, 0x01 ];
-            this.OP_CODE_RECEIVE_FIRMWARE_IMAGE = [ this.OP_CODE_RECEIVE_FIRMWARE_IMAGE_KEY ];
-            this.OP_CODE_VALIDATE = [ this.OP_CODE_VALIDATE_KEY ];
-            this.OP_CODE_ACTIVATE_AND_RESET = [ this.OP_CODE_ACTIVATE_AND_RESET_KEY ];
-            this.OP_CODE_RESET = [ this.OP_CODE_RESET_KEY ];
-            this.OP_CODE_PACKET_RECEIPT_NOTIF_REQ = [ this.OP_CODE_PACKET_RECEIPT_NOTIF_REQ_KEY, this.NUMBER_OF_PACKETS_BEFORE_NOTIF, 0x00 ];
+            this._eventCallbacks = {};
         }
 
-        FOTAUpdateHelper.prototype.logd = function( message ) {
-            if( this.options.logLevel && this.options.logLevel <= this.LOG_LEVEL_DEBUG ) {
-                console.log( message );
-            }
-        };
+        FOTAUpdateHelper.LOG_LEVEL_NO_LOGS = 0;
+        FOTAUpdateHelper.LOG_LEVEL_DEBUG = 1;
+        FOTAUpdateHelper.LOG_LEVEL_INFO = 2;
+        FOTAUpdateHelper.LOG_LEVEL_ERROR = 3;
 
-        FOTAUpdateHelper.prototype.logi = function( message ) {
-            if( this.options.logLevel && this.options.logLevel <= this.LOG_LEVEL_INFO ) {
-                console.log( message );
-            }
-        };
+        FOTAUpdateHelper.GENERIC_ATTRIBUTE_SERVICE_UUID = '00001801-0000-1000-8000-00805f9b34fb';
+        FOTAUpdateHelper.SERVICE_CHANGED_UUID = '00002a05-0000-1000-8000-00805f9b34fb';
+        FOTAUpdateHelper.DFU_SERVICE_UUID = '00001530-1212-efde-1523-785feabcd123';
+        FOTAUpdateHelper.DFU_CONTROL_POINT_UUID = '00001531-1212-efde-1523-785feabcd123';
+        FOTAUpdateHelper.DFU_PACKET_UUID = '00001532-1212-efde-1523-785feabcd123';
+        FOTAUpdateHelper.DFU_VERSION_UUID = '00001534-1212-efde-1523-785feabcd123';
 
-        FOTAUpdateHelper.prototype.loge = function( message ) {
-            if( this.options.logLevel && this.options.logLevel <= this.LOG_LEVEL_ERROR ) {
-                console.log( message );
-            }
-        };
+        FOTAUpdateHelper.NUMBER_OF_PACKETS_BEFORE_NOTIF = 12;
+        FOTAUpdateHelper.MAX_PACKET_SIZE = 20;
 
-        FOTAUpdateHelper.prototype.createTimeout = function( options, reject ) {
+        FOTAUpdateHelper.DFU_STATUS_SUCCESS = 1;
+        FOTAUpdateHelper.DFU_STATUS_INVALID_STATE = 2;
+        FOTAUpdateHelper.DFU_STATUS_NOT_SUPPORTED = 3;
+        FOTAUpdateHelper.DFU_STATUS_DATA_SIZE_EXCEEDS_LIMIT = 4;
+        FOTAUpdateHelper.DFU_STATUS_CRC_ERROR = 5;
+        FOTAUpdateHelper.DFU_STATUS_OPERATION_FAILED = 6;
 
-            var self = this;
+        FOTAUpdateHelper.OP_CODE_START_DFU_KEY = 0x01; // 1
+        FOTAUpdateHelper.OP_CODE_INIT_DFU_PARAMS_KEY = 0x02; // 2
+        FOTAUpdateHelper.OP_CODE_RECEIVE_FIRMWARE_IMAGE_KEY = 0x03; // 3
+        FOTAUpdateHelper.OP_CODE_VALIDATE_KEY = 0x04; // 4
+        FOTAUpdateHelper.OP_CODE_ACTIVATE_AND_RESET_KEY = 0x05; // 5
+        FOTAUpdateHelper.OP_CODE_RESET_KEY = 0x06; // 6
+        FOTAUpdateHelper.OP_CODE_PACKET_RECEIPT_NOTIF_REQ_KEY = 0x08; // 8
+        FOTAUpdateHelper.OP_CODE_RESPONSE_CODE_KEY = 0x10; // 16
+        FOTAUpdateHelper.OP_CODE_PACKET_RECEIPT_NOTIF_KEY = 0x11; // 17
 
-            var timeout = options && options.timeout ? options.timeout : 5000;
-            return setTimeout( function() {
-                self.logd( 'Operation timeout' );
-                reject( new Error( 'Operation timeout' ) );
-            }, timeout );
-        };
+        FOTAUpdateHelper.OP_CODE_START_DFU = [ FOTAUpdateHelper.OP_CODE_START_DFU_KEY, 0x04 ]; // always application
+        FOTAUpdateHelper.OP_CODE_INIT_DFU_PARAMS_START = [ FOTAUpdateHelper.OP_CODE_INIT_DFU_PARAMS_KEY, 0x00 ];
+        FOTAUpdateHelper.OP_CODE_INIT_DFU_PARAMS_COMPLETE = [ FOTAUpdateHelper.OP_CODE_INIT_DFU_PARAMS_KEY, 0x01 ];
+        FOTAUpdateHelper.OP_CODE_RECEIVE_FIRMWARE_IMAGE = [ FOTAUpdateHelper.OP_CODE_RECEIVE_FIRMWARE_IMAGE_KEY ];
+        FOTAUpdateHelper.OP_CODE_VALIDATE = [ FOTAUpdateHelper.OP_CODE_VALIDATE_KEY ];
+        FOTAUpdateHelper.OP_CODE_ACTIVATE_AND_RESET = [ FOTAUpdateHelper.OP_CODE_ACTIVATE_AND_RESET_KEY ];
+        FOTAUpdateHelper.OP_CODE_RESET = [ FOTAUpdateHelper.OP_CODE_RESET_KEY ];
+        FOTAUpdateHelper.OP_CODE_PACKET_RECEIPT_NOTIF_REQ = [ FOTAUpdateHelper.OP_CODE_PACKET_RECEIPT_NOTIF_REQ_KEY, FOTAUpdateHelper.NUMBER_OF_PACKETS_BEFORE_NOTIF, 0x00 ];
 
-        FOTAUpdateHelper.prototype.cancelTimeout = function( timeout ) {
-            clearTimeout( timeout );
-        };
+        FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE = 'state-change';
+        FOTAUpdateHelper.EVENT_UPLOAD_PROGRESS = 'upload-progress';
+        FOTAUpdateHelper.EVENT_ERROR = 'error';
 
-        FOTAUpdateHelper.prototype.wait = function( duration ) {
-            return new Promise( function( resolve ) {
-                setTimeout( resolve, duration );
-            } );
-        };
+        FOTAUpdateHelper.STATE_CHECKING_PRECONDITIONS = 'checking-preconditions';
+        FOTAUpdateHelper.STATE_CONNECTING_TO_DEVICE = 'connecting-to-device';
+        FOTAUpdateHelper.STATE_CLOSING_DEVICE_CONNECTION = 'closing-device-connection';
+        FOTAUpdateHelper.STATE_DISCOVERING_SERVICES = 'discovering-services';
+        FOTAUpdateHelper.STATE_SUBSCRIBING_FOR_NOTIFICATIONS = 'subscribing-for-notifications';
+        FOTAUpdateHelper.STATE_UNSUBSCRIBING_FOR_NOTIFICATIONS = 'unsubscribing-for-notifications';
+        FOTAUpdateHelper.STATE_STARTING_DFU = 'starting-dfu';
+        FOTAUpdateHelper.STATE_READING_FIRMWARE_FILE = 'reading-firmware-file';
+        FOTAUpdateHelper.STATE_INITIALIZING_IMAGE_UPLOAD = 'initializing-image-upload';
+        FOTAUpdateHelper.STATE_UPLOADING_IMAGE = 'uploading-image';
+        FOTAUpdateHelper.STATE_VALIDATING_UPLOADED_IMAGE = 'validating-uploaded-image';
+        FOTAUpdateHelper.STATE_RESTARTING_DEVICE = 'restarting-device';
 
-        FOTAUpdateHelper.prototype.waitForNotification = function( resolve ) {
+        FOTAUpdateHelper.prototype = {
 
-            var self = this;
+            _logd: function( message ) {
+                if( this._options.logLevel && this._options.logLevel <= FOTAUpdateHelper.LOG_LEVEL_DEBUG ) {
+                    console.log( message );
+                }
+            },
 
-            if( this.subscriptionNotification !== null ) {
-                return resolve(  );
-            }
+            _logi: function( message ) {
+                if( this._options.logLevel && this._options.logLevel <= FOTAUpdateHelper.LOG_LEVEL_INFO ) {
+                    console.log( message );
+                }
+            },
 
-            setTimeout( function() {
-                self.waitForNotification( resolve );
-            }, 100 );
-        };
+            _loge: function( message ) {
+                if( this._options.logLevel && this._options.logLevel <= FOTAUpdateHelper.LOG_LEVEL_ERROR ) {
+                    console.log( message );
+                }
+            },
 
-        FOTAUpdateHelper.prototype.connect = function() {
+            _createTimeout: function( options, reject ) {
 
-            var self = this;
+                var timeout = options && options.timeout ? options.timeout : 5000;
+                return setTimeout( function() {
+                    reject( new Error( 'Operation timeout' ) );
+                }, timeout );
+            },
 
-            var params = {
-                address: self.device.address
-            };
+            _cancelTimeout: function( timeout ) {
+                clearTimeout( timeout );
+            },
 
-            return new Promise( function( resolve, reject ) {
+            _wait: function( duration ) {
+                return new Promise( function( resolve ) {
+                    setTimeout( resolve, duration );
+                } );
+            },
 
-                var timeout = self.createTimeout( params, reject );
+            _setupSubscriptionNotification: function( resolve, reject ) {
+                this._subscriptionNotificationTimeout = this._createTimeout( { timeout: 20000 }, reject );
+                this._subscriptionNotificationHandler = resolve;
+            },
 
-                window.bluetoothle.connect(
-                    function( obj ) {
-                        self.logd( 'Connect success: ' + JSON.stringify( obj ) );
+            _resolveSubscriptionNotification: function( payload ) {
 
-                        self.cancelTimeout( timeout );
+                if( this._subscriptionNotificationTimeout ) {
+                    this._cancelTimeout( this._subscriptionNotificationTimeout );
+                    this._subscriptionNotificationTimeout = null;
+                }
 
-                        if( obj.status === 'disconnected' ) {
-                            self.close( { address: obj.address } );
-                        }
+                if( this._subscriptionNotificationHandler ) {
+                    var handler = this._subscriptionNotificationHandler;
+                    this._subscriptionNotificationHandler = null;
+                    handler( payload );
+                }
+            },
 
+            _parseResult: function( result ) {
+
+                if( !result || !result.value ) {
+                    return {
+                        opCode: 0,
+                        reqOpCode: 0,
+                        status: 0
+                    };
+                }
+
+                return {
+                    opCode: result.value[ 0 ],
+                    requestOpCode: result.value[ 1 ],
+                    status: result.value[ 2 ]
+                };
+            },
+
+            _emit: function( event, payload ) {
+
+                var listeners = this._eventCallbacks[ event ];
+
+                if( !listeners ) {
+                    return;
+                }
+
+                listeners.forEach( function( listener ) {
+                    listener( payload );
+                } );
+            },
+
+            on: function( event, callback ) {
+
+                if( typeof callback !== 'function' ) {
+                    throw new Error( 'Callback must be a function' );
+                }
+
+                this._eventCallbacks[ event ] = this._eventCallbacks[ event ] || [];
+                this._eventCallbacks[ event ].push( callback );
+
+                return this;
+            },
+
+            isInitialized: function() {
+
+                return new Promise( function( resolve ) {
+                    window.bluetoothle.isInitialized( function( obj ) {
                         resolve( obj );
-                    },
-                    function( obj ) {
-                        self.loge( 'Connect error: ' + JSON.stringify( obj ) );
+                    } );
+                } );
+            },
 
-                        if( obj.status === 'disconnected' ) {
-                            self.close( { address: obj.address } );
-                        }
+            isEnabled: function() {
 
-                        self.cancelTimeout( timeout );
-
-                        reject( obj );
-                    },
-                    params
-                );
-            } );
-        };
-
-        FOTAUpdateHelper.prototype.close = function() {
-
-            var self = this;
-
-            var params = {
-                address: self.device.address
-            };
-
-            return new Promise( function( resolve, reject ) {
-
-                window.bluetoothle.close(
-                    function( obj ) {
-                        self.logd( 'Close success: ' + JSON.stringify( obj ) );
+                return new Promise( function( resolve ) {
+                    window.bluetoothle.isEnabled( function( obj ) {
                         resolve( obj );
-                    },
-                    function( obj ) {
-                        self.loge( 'Close error: ' + JSON.stringify( obj ) );
-                        reject( obj );
-                    },
-                    params
-                );
-            } );
-        };
+                    } );
+                } );
+            },
 
-        FOTAUpdateHelper.prototype.discoverServices = function() {
+            connect: function() {
 
-            var self = this;
+                var self = this;
 
-            var params = {
-                address: self.device.address
-            };
+                var params = {
+                    address: self._device.address
+                };
 
-            return new Promise( function( resolve, reject ) {
+                return new Promise( function( resolve, reject ) {
 
-                var timeout = self.createTimeout( params, reject );
+                    var timeout = self._createTimeout( params, reject );
 
-                window.bluetoothle.discover(
-                    function( obj ) {
-                        self.logd( 'Discover Services success: ' + JSON.stringify( obj ) );
+                    window.bluetoothle.connect(
+                        function( obj ) {
+                            self._logd( 'Connect success: ' + JSON.stringify( obj ) );
 
-                        self.cancelTimeout( timeout );
+                            self._cancelTimeout( timeout );
 
-                        resolve( obj );
-                    },
-                    function( obj ) {
-                        $log.log( 'Discover Services error: ' + JSON.stringify( obj ) );
-
-                        self.cancelTimeout( timeout );
-
-                        reject( obj );
-                    },
-                    params
-                );
-            } );
-        };
-
-        FOTAUpdateHelper.prototype.subscribe = function() {
-
-            var self = this;
-
-            var params = {
-                address: self.device.address,
-                service: self.DFU_SERVICE_UUID,
-                characteristic: self.DFU_CONTROL_POINT_UUID
-            };
-
-            return new Promise( function( resolve, reject ) {
-
-                var timeout = self.createTimeout( params, reject );
-
-                window.bluetoothle.subscribe(
-                    function( obj ) {
-                        self.logd( 'Subscribe success: ' + JSON.stringify( obj ) );
-
-                        self.cancelTimeout( timeout );
-
-                        if( obj.status === 'subscribedResult' ) {
-                            var value = window.bluetoothle.encodedStringToBytes( obj.value );
-
-                            self.logd( 'Decoded result: ' + JSON.stringify( value ) );
-
-                            // TODO: Implement waiting timeout
-                            if( self.subscriptionNotificationHandler !== null ) {
-                                self.subscriptionNotificationHandler( value );
+                            if( obj.status === 'disconnected' ) {
+                                self.close( { address: obj.address } );
                             }
+
+                            resolve( obj );
+                        },
+                        function( obj ) {
+                            self._loge( 'Connect error: ' + JSON.stringify( obj ) );
+
+                            self.close( { address: obj.address } );
+                            self._cancelTimeout( timeout );
+
+                            reject( obj );
+                        },
+                        params
+                    );
+                } );
+            },
+
+            close: function() {
+
+                var self = this;
+
+                var params = {
+                    address: self._device.address
+                };
+
+                return new Promise( function( resolve ) {
+
+                    window.bluetoothle.close(
+                        function( obj ) {
+                            self._logd( 'Close success: ' + JSON.stringify( obj ) );
+                            resolve( obj );
+                        },
+                        function( obj ) {
+                            self._loge( 'Close error: ' + JSON.stringify( obj ) );
+                            resolve( obj ); // Not rejecting in case of error
+                        },
+                        params
+                    );
+                } );
+            },
+
+            discoverServices: function() {
+
+                var self = this;
+
+                var params = {
+                    address: self._device.address
+                };
+
+                return new Promise( function( resolve, reject ) {
+
+                    var timeout = self._createTimeout( params, reject );
+
+                    window.bluetoothle.discover(
+                        function( obj ) {
+                            self._logd( 'Discover Services success: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            resolve( obj );
+                        },
+                        function( obj ) {
+                            self._loge( 'Discover Services error: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            reject( obj );
+                        },
+                        params
+                    );
+                } );
+            },
+
+            subscribe: function() {
+
+                var self = this;
+
+                var params = {
+                    address: self._device.address,
+                    service: FOTAUpdateHelper.DFU_SERVICE_UUID,
+                    characteristic: FOTAUpdateHelper.DFU_CONTROL_POINT_UUID
+                };
+
+                return new Promise( function( resolve, reject ) {
+
+                    var timeout = self._createTimeout( params, reject );
+
+                    window.bluetoothle.subscribe(
+                        function( obj ) {
+                            self._logd( 'Subscribe success: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            if( obj.status === 'subscribedResult' ) {
+                                var value = window.bluetoothle.encodedStringToBytes( obj.value );
+
+                                self._logd( 'Decoded result: ' + JSON.stringify( value ) );
+
+                                obj.value = value;
+                                self._resolveSubscriptionNotification( obj );
+                            }
+
+                            resolve( obj );
+                        },
+                        function( obj ) {
+                            self._loge( 'Subscribe error: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            reject( obj );
+                        },
+                        params
+                    );
+                } );
+            },
+
+            unsubscribe: function() {
+
+                var self = this;
+
+                var params = {
+                    address: self._device.address,
+                    service: FOTAUpdateHelper.DFU_SERVICE_UUID,
+                    characteristic: FOTAUpdateHelper.DFU_CONTROL_POINT_UUID
+                };
+
+                return new Promise( function( resolve, reject ) {
+
+                    var timeout = self._createTimeout( params, reject );
+
+                    window.bluetoothle.unsubscribe(
+                        function( obj ) {
+                            self._logd( 'Unsubscribe success: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            resolve( obj );
+                        },
+                        function( obj ) {
+                            self._loge( 'Unsubscribe error: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            reject( obj );
+                        },
+                        params
+                    );
+                } );
+            },
+
+            write: function( characteristic, value, waitForNotification ) {
+
+                var self = this;
+
+                self._logd( 'Writing ' + JSON.stringify( value ) + ' to ' + characteristic );
+
+                var params = {
+                    address: self._device.address,
+                    service: FOTAUpdateHelper.DFU_SERVICE_UUID,
+                    characteristic: characteristic,
+                    value: window.bluetoothle.bytesToEncodedString( value )
+                };
+
+                return new Promise( function( resolve, reject ) {
+
+                    if( waitForNotification ) {
+                        self._setupSubscriptionNotification( resolve, reject );
+                    }
+
+                    var timeout = self._createTimeout( params, reject );
+
+                    window.bluetoothle.write(
+                        function( obj ) {
+                            self._logd( 'Write success: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            if( !waitForNotification ) {
+                                return resolve( obj );
+                            }
+                        },
+                        function( obj ) {
+                            self._loge( 'Write error: ' + JSON.stringify( obj ) );
+
+                            self._cancelTimeout( timeout );
+
+                            reject( obj );
+                        },
+                        params
+                    );
+                } );
+            },
+
+            uploadImage: function( inputStream ) {
+
+                var self = this;
+
+                var buffer = new Array( FOTAUpdateHelper.MAX_PACKET_SIZE );
+                var bytesSent = 0;
+                var packetsSent = 0;
+                var lastReportedProgress = 0;
+
+                var sendNextPacket = function() {
+
+                    var len = inputStream.readPacket( buffer );
+                    var lastPacket = bytesSent + len === inputStream.available;
+                    var waitForNotification = ++packetsSent % FOTAUpdateHelper.NUMBER_OF_PACKETS_BEFORE_NOTIF === 0 || lastPacket;
+
+                    return self.write( FOTAUpdateHelper.DFU_PACKET_UUID, buffer.slice( 0, len ), waitForNotification )
+                        .then( function( writeResult ) {
+
+                            if( waitForNotification ) {
+                                var result = self._parseResult( writeResult );
+
+                                if( lastPacket ) {
+                                    if( result.opCode !== FOTAUpdateHelper.OP_CODE_RESPONSE_CODE_KEY ||
+                                        result.requestOpCode !== FOTAUpdateHelper.OP_CODE_RECEIVE_FIRMWARE_IMAGE_KEY ||
+                                        result.status !== FOTAUpdateHelper.DFU_STATUS_SUCCESS ) {
+                                        throw new Error( 'Failed to upload image. Wrong confirmation response: ' + JSON.stringify( result ) );
+                                    }
+                                } else {
+                                    if( result.opCode !== FOTAUpdateHelper.OP_CODE_PACKET_RECEIPT_NOTIF_KEY ) {
+                                        throw new Error( 'Failed to upload image. Unexpected response: ' + JSON.stringify( result ) );
+                                    }
+                                }
+                            }
+
+                            bytesSent += len;
+
+                            var progress = Math.floor( bytesSent / inputStream.available * 100 );
+                            if( progress > 0 && progress > lastReportedProgress ) {
+                                self._logd( 'Transmission progress: ' + progress + '%' );
+
+                                self._emit( FOTAUpdateHelper.EVENT_UPLOAD_PROGRESS, {
+                                    progress: progress,
+                                    bytesSent: bytesSent,
+                                    bytesTotal: inputStream.available
+                                } );
+
+                                lastReportedProgress = progress;
+                            }
+
+                            if( bytesSent < inputStream.available ) {
+                                return sendNextPacket();
+                            }
+
+                            self._logd( 'Packets sent: ' + packetsSent );
+                        } );
+                };
+
+                inputStream.reset();
+                return sendNextPacket();
+            },
+
+            readFirmwareFile: function( firmwareFileUri ) {
+
+                var self = this;
+
+                return new Promise( function( resolve, reject ) {
+
+                    window.FilePath.resolveNativePath( firmwareFileUri,
+                        function( filePath ) {
+
+                            window.resolveLocalFileSystemURL( filePath,
+                                function( fileEntry ) {
+
+                                    fileEntry.file(
+                                        function( file ) {
+
+                                            self._logd( 'Firmware file size: ' + file.size );
+
+                                            var reader = new FileReader();
+
+                                            reader.onloadend = function( evt ) {
+                                                resolve( new Uint8Array( evt.target.result ) ); // TODO: Investigate error case
+                                            };
+
+                                            reader.readAsArrayBuffer( file );
+                                        },
+                                        reject
+                                    );
+                                },
+                                reject
+                            );
+                        },
+                        reject
+                    );
+                } );
+            },
+
+            formatFirmwareImageSize: function( size ) {
+
+                var buf = new ArrayBuffer( 12 );
+                var view = new DataView( buf );
+
+                view.setUint32( 8, size, true );
+
+                return new Uint8Array( buf );
+            },
+
+            uploadFirmware: function( firmwareFileUri ) {
+
+                var self = this;
+
+                self._logi( 'Starting OTA update' );
+
+                self._logi( 'Checking if bluetooth is initialized' );
+                self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_CHECKING_PRECONDITIONS } );
+                return self.isInitialized()
+                    .then( function( initializedResult ) {
+
+                        if( !initializedResult.isInitialized ) {
+                            throw new Error( 'Bluetooth must be initialized' );
                         }
 
-                        resolve( obj );
-                    },
-                    function( obj ) {
-                        self.loge( 'Subscribe error: ' + JSON.stringify( obj ) );
+                        self._logi( 'Checking if bluetooth is enabled' );
+                        return self.isEnabled()
+                            .then( function( enabledResult ) {
 
-                        self.cancelTimeout( timeout );
-
-                        reject( obj );
-                    },
-                    params
-                );
-            } );
-        };
-
-        FOTAUpdateHelper.prototype.write = function( characteristic, value, waitForNotification ) {
-
-            var self = this;
-
-            self.logd( 'Writing ' + JSON.stringify( value ) + ' to ' + characteristic );
-
-            var params = {
-                address: self.device.address,
-                service: self.DFU_SERVICE_UUID,
-                characteristic: characteristic,
-                value: window.bluetoothle.bytesToEncodedString( value )
-            };
-
-            return new Promise( function( resolve, reject ) {
-
-                self.subscriptionNotificationHandler = waitForNotification ? resolve : null;
-
-                var timeout = self.createTimeout( params, reject );
-
-                window.bluetoothle.write(
-                    function( obj ) {
-                        self.logd( 'Write success: ' + JSON.stringify( obj ) );
-
-                        self.cancelTimeout( timeout );
-
-                        if( !waitForNotification ) {
-                            return resolve( obj );
-                        }
-                    },
-                    function( obj ) {
-                        self.loge( 'Write error: ' + JSON.stringify( obj ) );
-
-                        self.cancelTimeout( timeout );
-
-                        reject( obj );
-                    },
-                    params
-                );
-            } );
-        };
-
-        FOTAUpdateHelper.prototype.sendImage = function( inputStream ) {
-
-            var self = this;
-
-            var buffer = new Array( self.MAX_PACKET_SIZE );
-            var bytesSent = 0;
-            var packetsSent = 0;
-            var startTime = Date.now();
-            var lastReportedProgress = 0;
-
-            var sendNextPacket = function() {
-
-                var len = inputStream.readPacket( buffer );
-                var waitForNotification = ++packetsSent % self.NUMBER_OF_PACKETS_BEFORE_NOTIF === 0;
-
-                return self.write( Constants.DFU_PACKET_UUID, buffer.slice( 0, len ), waitForNotification )
+                                if( !enabledResult.isEnabled ) {
+                                    throw new Error( 'Bluetooth must be enabled' );
+                                }
+                            } );
+                    } )
                     .then( function() {
 
-                        bytesSent += len;
+                        self._logi( 'Connecting to device' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_CONNECTING_TO_DEVICE } );
+                        return self.connect()
+                            .then( function( result ) {
 
-                        var progress = Math.floor( bytesSent / inputStream.available * 100 );
-                        if( progress > 0 && progress % 10 === 0 && progress > lastReportedProgress ) {
-                            self.logd( 'Transmission progress: ' + progress + '%' );
-                            lastReportedProgress = progress;
-                        }
+                                if( result.status !== 'connected' ) {
+                                    throw new Error( 'Failed to connect to the device' );
+                                }
+                            } );
+                    } )
+                    .then( function() {
 
-                        if( bytesSent < inputStream.available ) {
-                            return sendNextPacket();
-                        }
+                        self._logi( 'Discovering services' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_DISCOVERING_SERVICES } );
+                        return self.discoverServices()
+                            .then( function( result ) {
 
-                        self.logd( 'Packets sent: ' + packetsSent );
+                                if( result.status !== 'discovered' ) {
+                                    throw new Error( 'Failed to discover services' );
+                                }
 
-                        var time = ( Date.now() - startTime ) / 1000;
-                        self.logd( 'Transmission time: ' + time + 's' );
-                    } );
-            };
-
-            inputStream.reset();
-            return sendNextPacket();
-        };
-
-        FOTAUpdateHelper.prototype.readFirmwareFile = function( firmwareFileUri ) {
-
-            var self = this;
-
-            return new Promise( function( resolve, reject ) {
-
-                window.FilePath.resolveNativePath( firmwareFileUri,
-                    function( filePath ) {
-
-                        window.resolveLocalFileSystemURL( filePath,
-                            function( fileEntry ) {
-
-                                fileEntry.file(
-                                    function( file ) {
-
-                                        self.logd( 'Firmware file size: ' + file.size );
-
-                                        var reader = new FileReader();
-
-                                        reader.onloadend = function( evt ) {
-                                            resolve( new Uint8Array( evt.target.result ) ); // TODO: Investigate error case
-                                        };
-
-                                        reader.readAsArrayBuffer( file );
-                                    },
-                                    reject
-                                );
-                            },
-                            reject
-                        );
-                    },
-                    reject
-                );
-            } );
-        };
-
-        FOTAUpdateHelper.prototype.formatFirmwareImageSize = function( size ) {
-
-            var buf = new ArrayBuffer( 12 );
-            var view = new DataView( buf );
-
-            view.setUint32( 8, size, true );
-
-            return new Uint8Array( buf );
-        };
-
-        FOTAUpdateHelper.prototype.uploadFirmware = function( firmwareFileUri ) {
-
-            var self = this;
-
-            self.logi( 'Starting OTA update' );
-
-            // TODO: Check responses
-            self.logi( 'Connecting to device' );
-            return self.connect()
-                .then( function() {
-
-                    self.logi( 'Discovering services' );
-                    return self.discoverServices();
-                } )
-                .then( function() {
-
-                    self.logi( 'Subscribing for notifications' );
-                    return self.subscribe();
-                } )
-                .then( function() {
-
-                    self.logi( 'Sending Start DFU command' );
-                    return self.write( self.DFU_CONTROL_POINT_UUID, self.OP_CODE_START_DFU, false );
-                } )
-                .then( function() {
-
-                    self.logi( 'Reading firmware file' );
-                    return self.readFirmwareFile( firmwareFileUri );
-                } )
-                .then( function( fileBuf ) {
-
-                    var inputStream = new HexFileInputStream( fileBuf );
-
-                    self.logi( 'Sending image size: ' + inputStream.available );
-                    var sizeArr = self.formatFirmwareImageSize( inputStream.available );
-                    return self.write( Constants.DFU_PACKET_UUID, sizeArr, true )
-                        .then( function() {
-
-                            self.logi( 'Sending the number of packets before notification' );
-                            return self.write( self.DFU_CONTROL_POINT_UUID, self.OP_CODE_PACKET_RECEIPT_NOTIF_REQ, false );
-                        } )
-                        .then( function() {
-
-                            self.logi( 'Sending Receive Firmware Image request' );
-                            return self.write( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_RECEIVE_FIRMWARE_IMAGE, false );
-                        } )
-                        .then( function() {
-
-                            self.logi( 'Uploading firmware' );
-                            return self.sendImage( inputStream )
-                                .then( function() {
-                                    return self.wait( 2000 );
+                                var dfuService = result.services.find( function( service ) {
+                                    return service.uuid === FOTAUpdateHelper.DFU_SERVICE_UUID;
                                 } );
-                        } )
-                        .then( function() {
 
-                            self.logi( 'Sending Validate request' );
-                            return self.write( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_VALIDATE, true );
-                        } )
-                        .then( function() {
+                                if( !dfuService ) {
+                                    throw new Error( 'DFU service not found' );
+                                }
+                            } );
+                    } )
+                    .then( function() {
 
-                            self.logi( 'Sending Activate and Reset request' );
-                            return self.write( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_ACTIVATE_AND_RESET, false );
-                        } );
-                } )
-                .catch( function( err ) {
-                    self.loge( 'Update failed: ' + JSON.stringify( err ) );
-                } );
+                        self._logi( 'Subscribing for notifications' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_SUBSCRIBING_FOR_NOTIFICATIONS } );
+                        return self.subscribe();
+                    } )
+                    .then( function() {
+
+                        self._logi( 'Sending Start DFU command' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_STARTING_DFU } );
+                        return self.write( FOTAUpdateHelper.DFU_CONTROL_POINT_UUID, FOTAUpdateHelper.OP_CODE_START_DFU, false );
+                    } )
+                    .then( function() {
+
+                        self._logi( 'Reading firmware file' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_READING_FIRMWARE_FILE } );
+                        return self.readFirmwareFile( firmwareFileUri );
+                    } )
+                    .then( function( fileBuf ) {
+
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_INITIALIZING_IMAGE_UPLOAD } );
+
+                        var inputStream = new HexFileInputStream( fileBuf );
+
+                        self._logi( 'Sending image size: ' + inputStream.available );
+                        var sizeArr = self.formatFirmwareImageSize( inputStream.available );
+                        return self.write( FOTAUpdateHelper.DFU_PACKET_UUID, sizeArr, true )
+                            .then( function( sizeResult ) {
+
+                                var result = self._parseResult( sizeResult );
+                                if( result.requestOpCode !== FOTAUpdateHelper.OP_CODE_START_DFU_KEY ||
+                                    result.status !== FOTAUpdateHelper.DFU_STATUS_SUCCESS ) {
+                                    throw new Error( 'Failed to send image size. Response: ' + JSON.stringify( result ) );
+                                }
+
+                                self._logi( 'Sending the number of packets before notification' );
+                                return self.write( FOTAUpdateHelper.DFU_CONTROL_POINT_UUID, FOTAUpdateHelper.OP_CODE_PACKET_RECEIPT_NOTIF_REQ, false );
+                            } )
+                            .then( function() {
+
+                                self._logi( 'Sending Receive Firmware Image request' );
+                                return self.write( FOTAUpdateHelper.DFU_CONTROL_POINT_UUID, FOTAUpdateHelper.OP_CODE_RECEIVE_FIRMWARE_IMAGE, false );
+                            } )
+                            .then( function() {
+
+                                var startTime = Date.now();
+
+                                self._logi( 'Uploading firmware' );
+                                self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_UPLOADING_IMAGE } );
+                                return self.uploadImage( inputStream )
+                                    .then( function() {
+
+                                        var time = ( Date.now() - startTime ) / 1000;
+                                        self._logi( 'Transmission time: ' + time + 's' );
+
+                                        return self._wait( 2000 );
+                                    } );
+                            } );
+                    } )
+                    .then( function() {
+
+                        self._logi( 'Sending Validate request' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_VALIDATING_UPLOADED_IMAGE } );
+                        return self.write( FOTAUpdateHelper.DFU_CONTROL_POINT_UUID, FOTAUpdateHelper.OP_CODE_VALIDATE, true )
+                            .then( function( validationResult ) {
+
+                                var result = self._parseResult( validationResult );
+                                if( result.requestOpCode !== FOTAUpdateHelper.OP_CODE_VALIDATE_KEY ||
+                                    result.status !== FOTAUpdateHelper.DFU_STATUS_SUCCESS ) {
+                                    throw new Error( 'Failed to validate image. Response: ' + JSON.stringify( result ) );
+                                }
+                            } );
+                    } )
+                    .then( function() {
+
+                        self._logi( 'Canceling subscription for notifications' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_UNSUBSCRIBING_FOR_NOTIFICATIONS } );
+                        return self.unsubscribe();
+                    } )
+                    .then( function() {
+
+                        self._logi( 'Sending Activate and Reset request' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_RESTARTING_DEVICE } );
+                        self._disconnectionExpected = true;
+                        return self.write( FOTAUpdateHelper.DFU_CONTROL_POINT_UUID, FOTAUpdateHelper.OP_CODE_ACTIVATE_AND_RESET, false );
+                    } )
+                    .then( function() {
+
+                        self._logi( 'Closing connection to device' );
+                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_CLOSING_DEVICE_CONNECTION } );
+                        return self.close();
+                    } )
+                    .catch( function( err ) {
+
+                        var message = err instanceof Error ? JSON.stringify( err, [ 'message' ] ) : JSON.stringify( err );
+                        self._loge( 'Update failed: ' + message );
+
+                        self._emit( FOTAUpdateHelper.EVENT_ERROR, { err: err } );
+                        self.close();
+                    } );
+            }
         };
 
         // ---------------------------------------------------------------------
@@ -691,399 +920,81 @@ angular
 
         vm.device = $stateParams.device;
         vm.connected = false;
+        vm.stateMessage = 'Press Update button';
 
-        // var subscriptions = {};
         var firmwareFileUri = 'content://com.android.providers.downloads.documents/document/16535';
 
-        /*
-        var createTimeout = function( params, q ) {
-
-            if( params.timeout ) {
-                return $timeout( function() {
-                    params.error = 'timeout';
-                    q.reject( params );
-                }, params.timeout );
-            }
-
-            return null;
-        };
-
-        var close = function( params ) {
-
-            var q = $q.defer();
-
-            window.bluetoothle.close(
-                function( obj ) {
-                    $log.log( 'Close Success: ' + JSON.stringify( obj ) );
-                    vm.connected = false;
-
-                    q.resolve( obj );
-                },
-                function( obj ) {
-                    $log.log( 'Close Error: ' + JSON.stringify( obj ) );
-
-                    q.reject( obj );
-                },
-                params
-            );
-
-            return q.promise;
-        };
-
-        var connect = function( params ) {
-
-            var q = $q.defer();
-
-            var timeout = createTimeout( params, q );
-
-            window.bluetoothle.connect(
-                function( obj ) {
-                    $log.log( 'Connect Success: ' + JSON.stringify( obj ) );
-
-                    $timeout.cancel(timeout);
-                    vm.connected = true;
-
-                    if( obj.status === 'disconnected' ) {
-                        close( { address: obj.address } );
-                    }
-
-                    if(params.useResolve) {
-                        q.resolve( obj );
-                    } else {
-                        q.notify( obj );
-                    }
-                },
-                function( obj ) {
-                    $log.log( 'Connect Error: ' + JSON.stringify( obj ) );
-
-                    $timeout.cancel( timeout );
-                    q.reject( obj );
-                },
-                params
-            );
-
-            return q.promise;
-        };
-
-        var discover = function( params ) {
-
-            var q = $q.defer();
-            var timeout = createTimeout( params, q );
-
-            window.bluetoothle.discover(
-                function( obj ) {
-                    $log.log( 'Discover Success: ' + JSON.stringify( obj ) );
-
-                    $timeout.cancel( timeout );
-                    q.resolve( obj );
-                },
-                function( obj ) {
-                    $log.log( 'Discover Error: ' + JSON.stringify( obj ) );
-
-                    $timeout.cancel( timeout );
-                    q.reject( obj );
-                },
-                params
-            );
-
-            return q.promise;
-        };
-
-        var write = function( params, noLog ) {
-
-            var q = $q.defer();
-
-            var timeout = createTimeout( params, q );
-
-            window.bluetoothle.write(
-                function( obj ) {
-
-                    if( !noLog ) {
-                        $log.log( 'Write Success: ' + JSON.stringify( obj ) );
-                        $log.log( 'Write Success Value: ' + JSON.stringify( $cordovaBluetoothLE.encodedStringToBytes( obj.value ) ) );
-                    }
-
-                    $timeout.cancel( timeout );
-                    q.resolve( obj );
-                },
-                function( obj ) {
-                    $log.log( 'Write Error: ' + JSON.stringify( obj ) );
-
-                    $timeout.cancel( timeout );
-                    q.reject( obj );
-                },
-                params
-            );
-
-            return q.promise;
-        };
-
-        var subscribe = function( params ) {
-
-            var q = $q.defer();
-
-            var timeout = createTimeout( params, q );
-
-            window.bluetoothle.subscribe(
-                function( obj ) {
-                    $log.log( 'Subscribe Success: ' + JSON.stringify( obj ) );
-
-                    if( obj.status === 'subscribedResult' ) {
-                        subscriptions[ obj.characteristic ] = window.bluetoothle.encodedStringToBytes( obj.value );
-                        $log.log( 'Decoded result: ' + JSON.stringify( subscriptions[ obj.characteristic ] ) );
-                    }
-
-                    $timeout.cancel( timeout );
-                    q.resolve( obj );
-                },
-                function( obj ) {
-                    $log.log( 'Subscribe Error: ' + JSON.stringify( obj ) );
-
-                    $timeout.cancel( timeout );
-                    q.reject( obj );
-                },
-                params
-            );
-
-            return q.promise;
-        };
-
-        var waitForNotification = function( characteristic, callback ) {
-
-            if( subscriptions[ characteristic ] === null ) {
-                setTimeout( function() {
-                    waitForNotification( characteristic, callback );
-                }, 100 );
-            } else {
-                callback();
-            }
-        };
-
-        var writeOpCode = function( characteristic, value, shouldWaitForNotification, noLog ) {
-
-            if( !noLog ) {
-                $log.log( 'Writing ' + JSON.stringify( value ) + ' to ' + characteristic );
-            }
-
-            var params = {
-                address: vm.device.address,
-                service: Constants.DFU_SERVICE_UUID,
-                characteristic: characteristic,
-                value: $cordovaBluetoothLE.bytesToEncodedString( value )
-            };
-
-            subscriptions[ Constants.DFU_CONTROL_POINT_UUID ] = null;
-
-            return write( params, noLog )
-                .then( function() {
-
-                    if( !shouldWaitForNotification ) {
-                        return;
-                    }
-
-                    return $q( function( resolve ) {
-                        waitForNotification( Constants.DFU_CONTROL_POINT_UUID, resolve );
-                    } );
-                } );
-        };
-
-        var formatFirmwareImageSize = function( size ) {
-
-            var buf = new ArrayBuffer( 12 );
-            var view = new DataView( buf );
-
-            view.setUint32( 8, size, true );
-
-            return new Uint8Array( buf );
-        };
-
-        var wait = function( duration ) {
-
-            var q = $q.defer();
-
-            setTimeout( q.resolve, duration );
-
-            return q.promise;
-        };
-
-        var sendImage = function( inputStream ) {
-
-            const MAX_PACKET_SIZE = 20;
-            var buffer = new Array( MAX_PACKET_SIZE );
-            var bytesSent = 0;
-            var packetsSent = 0;
-
-            var startTime = Date.now();
-            var lastReportedProgress = 0;
-
-            var sendNextPacket = function() {
-
-                var len = inputStream.readPacket( buffer );
-                var waitForNotification = ++packetsSent % Constants.NUMBER_OF_PACKETS_BEFORE_NOTIF === 0;
-
-                return writeOpCode( Constants.DFU_PACKET_UUID, buffer.slice( 0, len ), waitForNotification, false )
-                    .then( function() {
-
-                        bytesSent += len;
-
-                        var progress = Math.floor( bytesSent / inputStream.available * 100 );
-                        if( progress > 0 && progress % 10 === 0 && progress > lastReportedProgress ) {
-                            $log.log( 'Transmission progress: ' + progress + '%' );
-                            lastReportedProgress = progress;
-                        }
-
-                        if( bytesSent < inputStream.available ) {
-                            return sendNextPacket();
-                        }
-
-                        $log.log( 'Packets sent: ' + packetsSent );
-
-                        var time = ( Date.now() - startTime ) / 1000;
-                        $log.log( 'Transmission time: ' + time + 's' );
-
-                        return;
-                    } );
-            };
-
-            inputStream.reset();
-            return sendNextPacket();
-        };
-
-        vm.discoverDevice = function() {
-
-            var params = {
-                address: vm.device.address
-            };
-
-            return discover( params )
-                .then( function( data ) {
-                    $log.log( data );
-                } );
-        };
-
-        vm.connectToDevice = function() {
-
-            var params = {
-                address: vm.device.address,
-                useResolve: true
-            };
-
-            return connect( params )
-                .then( function( data ) {
-                    $log.log( data );
-                } );
-        };
+        function updateStateMessage( message ) {
+            $timeout( function() {
+                vm.stateMessage = message;
+            } );
+        }
 
         vm.uploadFirmware = function() {
 
-            $log.log( 'Starting OTA update' );
+            var helper = new FOTAUpdateHelper( vm.device, { logLevel: FOTAUpdateHelper.LOG_LEVEL_DEBUG } );
 
-            $log.log( 'Discovering device' );
-            return vm.connectToDevice()
-                .then( function() {
-                    return vm.discoverDevice();
+            helper
+                .on( FOTAUpdateHelper.EVENT_UPLOAD_PROGRESS, function( payload ) {
+                    console.log( payload.progress + '%' );
+                    updateStateMessage( 'Uploading image: ' + payload.progress + '%' );
                 } )
-                .then( function() {
+                .on( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, function( payload ) {
 
-                    $log.log( 'Subscribing for notifications' );
+                    switch ( payload.state ) {
+                        case FOTAUpdateHelper.STATE_CHECKING_PRECONDITIONS:
+                            updateStateMessage( 'Checking preconditions' );
+                            break;
 
-                    var params = {
-                        address: vm.device.address,
-                        service: Constants.DFU_SERVICE_UUID,
-                        characteristic: Constants.DFU_CONTROL_POINT_UUID
-                    };
+                        case FOTAUpdateHelper.STATE_CONNECTING_TO_DEVICE:
+                            updateStateMessage( 'Connecting to device' );
+                            break;
 
-                    return subscribe( params )
-                        .then( function() {
-                            return wait( 1000 ); // TODO: Probably, can be removed
-                        } );
+                        case FOTAUpdateHelper.STATE_DISCOVERING_SERVICES:
+                            updateStateMessage( 'Discovering services' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_SUBSCRIBING_FOR_NOTIFICATIONS:
+                            updateStateMessage( 'Subscribing for notifications' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_STARTING_DFU:
+                            updateStateMessage( 'Starting DFU' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_READING_FIRMWARE_FILE:
+                            updateStateMessage( 'Reading firmware file' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_INITIALIZING_IMAGE_UPLOAD:
+                            updateStateMessage( 'Initializing image upload' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_UPLOADING_IMAGE:
+                            updateStateMessage( 'Uploading image: 0%' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_VALIDATING_UPLOADED_IMAGE:
+                            updateStateMessage( 'Validating uploaded image' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_RESTARTING_DEVICE:
+                            updateStateMessage( 'Restarting device' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_UNSUBSCRIBING_FOR_NOTIFICATIONS:
+                            updateStateMessage( 'Canceling subscription for notifications' );
+                            break;
+
+                        case FOTAUpdateHelper.STATE_CLOSING_DEVICE_CONNECTION:
+                            updateStateMessage( 'Done!' );
+                            break;
+                    }
                 } )
-                .then( function() {
-
-                    $log.log( 'Sending Start DFU command' );
-                    return writeOpCode( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_START_DFU, false );
-                } )
-                .then( function() {
-
-                    $log.log( 'Resolving firmware file' );
-                    return $q( function( resolve, reject ) {
-
-                        window.FilePath.resolveNativePath( firmwareFileUri,
-                            function( filePath ) {
-
-                                window.resolveLocalFileSystemURL( filePath,
-                                    function( fileEntry ) {
-
-                                        fileEntry.file(
-                                            function( file ) {
-
-                                                $log.log( 'Firmware file size: ' + file.size );
-
-                                                var reader = new FileReader();
-
-                                                reader.onloadend = function( evt ) {
-                                                    $log.log( JSON.stringify( evt ) );
-                                                    resolve( new Uint8Array( evt.target.result ) ); // TODO: Investigate error case
-                                                };
-
-                                                reader.readAsArrayBuffer( file );
-                                            },
-                                            reject
-                                        );
-                                    },
-                                    reject
-                                );
-                            },
-                            reject
-                        );
-                    } );
-                } )
-                .then( function( fileBuf ) {
-
-                    var inputStream = new HexFileInputStream( fileBuf );
-
-                    $log.log( 'Sending image size: ' + inputStream.available );
-                    var sizeArr = formatFirmwareImageSize( inputStream.available );
-                    return writeOpCode( Constants.DFU_PACKET_UUID, sizeArr, true )
-                        .then( function() {
-
-                            $log.log( 'Sending the number of packets before notifications' );
-                            return writeOpCode( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_PACKET_RECEIPT_NOTIF_REQ, false );
-                        } )
-                        .then( function() {
-
-                            $log.log( 'Sending Receive Firmware Image request' );
-                            return writeOpCode( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_RECEIVE_FIRMWARE_IMAGE, false );
-                        } )
-                        .then( function() {
-
-                            $log.log( 'Uploading firmware' );
-                            return sendImage( inputStream )
-                                .then( function() {
-                                    // TODO: Check response
-                                    return wait( 2000 );
-                                } );
-                        } )
-                        .then( function() {
-
-                            $log.log( 'Sending Validate request' );
-                            return writeOpCode( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_VALIDATE, true );
-                        } )
-                        .then( function() {
-
-                            $log.log( 'Sending Activate and Reset request' );
-                            return writeOpCode( Constants.DFU_CONTROL_POINT_UUID, Constants.OP_CODE_ACTIVATE_AND_RESET, false );
-                        } );
-                } )
-                .catch( function( err ) {
-                    $log.error( 'Update failed: ' + JSON.stringify( err ) );
+                .on( FOTAUpdateHelper.EVENT_ERROR, function() {
+                    updateStateMessage( 'Sorry, error occurred' );
                 } );
-        };
-        */
 
-        vm.uploadFirmware = function() {
-
-            var helper = new FOTAUpdateHelper( vm.device, { logLevel: 1 } );
             helper.uploadFirmware( firmwareFileUri );
         };
 
