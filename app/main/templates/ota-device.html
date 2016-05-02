@@ -3,14 +3,21 @@
   <ion-content class="padding">
 
     <!-- content goes here -->
-    <button type="input" class="button button-positive" ng-click="vm.connectToDevice()">{{vm.connected ? 'Disconnect' : 'Connect'}}</button>
-    <button type="input" class="button button-positive" ng-click="vm.discoverDevice()" ng-show="vm.connected">Discover</button>
-    <button type="input" class="button button-positive" ng-click="vm.selectFirmwareFile()">File</button>
-    <button type="input" class="button button-positive" ng-click="vm.uploadFirmware()" >Update</button>
+    <div>
+      <button type="input" class="button button-block button-positive" ng-click="vm.selectFirmwareFile()">Select Firmware</button>
+      <div class="card">
+        <div class="item item-text-wrap text-center">
+          {{vm.firmwareFileBuf ? 'Firmware file size: ' + vm.firmwareFileBuf.length : 'Choose firmware file'}}
+        </div>
+      </div>
+    </div>
 
-    <div class="card">
-      <div class="item item-text-wrap text-center">
-        {{vm.stateMessage}}
+    <div>
+      <button type="input" class="button button-block button-positive" ng-click="vm.uploadFirmware()" ng-disabled="!vm.firmwareFileBuf">Update</button>
+      <div class="card">
+        <div class="item item-text-wrap text-center">
+          {{vm.stateMessage}}
+        </div>
       </div>
     </div>
 

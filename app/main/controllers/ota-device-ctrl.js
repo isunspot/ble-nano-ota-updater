@@ -247,10 +247,6 @@ angular
                 throw new Error( 'bluetoothle plugin not found' );
             }
 
-            if( !window.FilePath ) {
-                throw new Error( 'FilePath plugin not found' );
-            }
-
             this._device = device;
             this._options = options || {};
 
@@ -312,7 +308,6 @@ angular
         FOTAUpdateHelper.STATE_SUBSCRIBING_FOR_NOTIFICATIONS = 'subscribing-for-notifications';
         FOTAUpdateHelper.STATE_UNSUBSCRIBING_FOR_NOTIFICATIONS = 'unsubscribing-for-notifications';
         FOTAUpdateHelper.STATE_STARTING_DFU = 'starting-dfu';
-        FOTAUpdateHelper.STATE_READING_FIRMWARE_FILE = 'reading-firmware-file';
         FOTAUpdateHelper.STATE_INITIALIZING_IMAGE_UPLOAD = 'initializing-image-upload';
         FOTAUpdateHelper.STATE_UPLOADING_IMAGE = 'uploading-image';
         FOTAUpdateHelper.STATE_VALIDATING_UPLOADED_IMAGE = 'validating-uploaded-image';
@@ -322,19 +317,19 @@ angular
 
             _logd: function( message ) {
                 if( this._options.logLevel && this._options.logLevel <= FOTAUpdateHelper.LOG_LEVEL_DEBUG ) {
-                    console.log( message );
+                    console.debug( message );   // eslint-disable-line no-console
                 }
             },
 
             _logi: function( message ) {
                 if( this._options.logLevel && this._options.logLevel <= FOTAUpdateHelper.LOG_LEVEL_INFO ) {
-                    console.log( message );
+                    console.info( message );   // eslint-disable-line no-console
                 }
             },
 
             _loge: function( message ) {
                 if( this._options.logLevel && this._options.logLevel <= FOTAUpdateHelper.LOG_LEVEL_ERROR ) {
-                    console.log( message );
+                    console.error( message );   // eslint-disable-line no-console
                 }
             },
 
@@ -709,42 +704,6 @@ angular
                 return sendNextPacket();
             },
 
-            readFirmwareFile: function( firmwareFileUri ) {
-
-                var self = this;
-
-                return new Promise( function( resolve, reject ) {
-
-                    window.FilePath.resolveNativePath( firmwareFileUri,
-                        function( filePath ) {
-
-                            window.resolveLocalFileSystemURL( filePath,
-                                function( fileEntry ) {
-
-                                    fileEntry.file(
-                                        function( file ) {
-
-                                            self._logd( 'Firmware file size: ' + file.size );
-
-                                            var reader = new FileReader();
-
-                                            reader.onloadend = function( evt ) {
-                                                resolve( new Uint8Array( evt.target.result ) ); // TODO: Investigate error case
-                                            };
-
-                                            reader.readAsArrayBuffer( file );
-                                        },
-                                        reject
-                                    );
-                                },
-                                reject
-                            );
-                        },
-                        reject
-                    );
-                } );
-            },
-
             formatFirmwareImageSize: function( size ) {
 
                 var buf = new ArrayBuffer( 12 );
@@ -755,9 +714,13 @@ angular
                 return new Uint8Array( buf );
             },
 
-            uploadFirmware: function( firmwareFileUri ) {
+            uploadFirmware: function( firmwareBuf ) {
 
                 var self = this;
+
+                if( !firmwareBuf || firmwareBuf.length === 0 ) {
+                    return Promise.reject( new Error( 'Invalid firmware buffer' ) );
+                }
 
                 self._logi( 'Starting OTA update' );
 
@@ -825,15 +788,9 @@ angular
                     } )
                     .then( function() {
 
-                        self._logi( 'Reading firmware file' );
-                        self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_READING_FIRMWARE_FILE } );
-                        return self.readFirmwareFile( firmwareFileUri );
-                    } )
-                    .then( function( fileBuf ) {
-
                         self._emit( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, { state: FOTAUpdateHelper.STATE_INITIALIZING_IMAGE_UPLOAD } );
 
-                        var inputStream = new HexFileInputStream( fileBuf );
+                        var inputStream = new HexFileInputStream( firmwareBuf );
 
                         self._logi( 'Sending image size: ' + inputStream.available );
                         var sizeArr = self.formatFirmwareImageSize( inputStream.available );
@@ -920,9 +877,58 @@ angular
 
         vm.device = $stateParams.device;
         vm.connected = false;
-        vm.stateMessage = 'Press Update button';
+        vm.stateMessage = 'Press Update Button';
 
-        var firmwareFileUri = 'content://com.android.providers.downloads.documents/document/16535';
+        // var firmwareFileUri = 'content://com.android.providers.downloads.documents/document/16535';
+        vm.firmwareFileBuf;
+
+        function chooseLocalFile() {
+
+            return new Promise( function( resolve, reject ) {
+
+                window.fileChooser.open(
+                    function( uri ) {
+                        resolve( uri );
+                    },
+                    function( err ) {
+                        $log.error( 'Failed to select firmware file: ' + JSON.stringify( err ) );
+                        reject( err );
+                    }
+                );
+            } );
+        }
+
+        function readFirmwareFile( firmwareFileUri ) {
+
+            return new Promise( function( resolve, reject ) {
+
+                window.FilePath.resolveNativePath( firmwareFileUri,
+                    function( filePath ) {
+
+                        window.resolveLocalFileSystemURL( filePath,
+                            function( fileEntry ) {
+
+                                fileEntry.file(
+                                    function( file ) {
+
+                                        var reader = new FileReader();
+
+                                        reader.onloadend = function( evt ) {
+                                            resolve( new Uint8Array( evt.target.result ) );
+                                        };
+
+                                        reader.readAsArrayBuffer( file );
+                                    },
+                                    reject
+                                );
+                            },
+                            reject
+                        );
+                    },
+                    reject
+                );
+            } );
+        }
 
         function updateStateMessage( message ) {
             $timeout( function() {
@@ -936,7 +942,7 @@ angular
 
             helper
                 .on( FOTAUpdateHelper.EVENT_UPLOAD_PROGRESS, function( payload ) {
-                    console.log( payload.progress + '%' );
+                    $log.debug( payload.progress + '%' );
                     updateStateMessage( 'Uploading image: ' + payload.progress + '%' );
                 } )
                 .on( FOTAUpdateHelper.EVENT_UPDATE_STATE_CHANGE, function( payload ) {
@@ -960,10 +966,6 @@ angular
 
                         case FOTAUpdateHelper.STATE_STARTING_DFU:
                             updateStateMessage( 'Starting DFU' );
-                            break;
-
-                        case FOTAUpdateHelper.STATE_READING_FIRMWARE_FILE:
-                            updateStateMessage( 'Reading firmware file' );
                             break;
 
                         case FOTAUpdateHelper.STATE_INITIALIZING_IMAGE_UPLOAD:
@@ -991,21 +993,26 @@ angular
                             break;
                     }
                 } )
-                .on( FOTAUpdateHelper.EVENT_ERROR, function() {
+                .on( FOTAUpdateHelper.EVENT_ERROR, function( err ) {
+                    $log.error( 'Failed to upload firmware: ' + JSON.stringify( err ) );
                     updateStateMessage( 'Sorry, error occurred' );
                 } );
 
-            helper.uploadFirmware( firmwareFileUri );
+            helper.uploadFirmware( vm.firmwareFileBuf );
         };
 
         vm.selectFirmwareFile = function() {
-            window.fileChooser.open(
-                function( uri ) {
-                    firmwareFileUri = uri;
-                },
-                function( err ) {
-                    $log.error( 'Failed to select firmware file: ' + JSON.stringify( err ) );
-                }
-            );
+
+            return chooseLocalFile()
+                .then( function( fileUri ) {
+
+                    return readFirmwareFile( fileUri )
+                        .then( function( fileBuf ) {
+                            $timeout( function() { vm.firmwareFileBuf = fileBuf; } );
+                        } );
+                } )
+                .catch( function( err ) {
+                    $log.error( 'Failed to load firmware file: ' + JSON.stringify( err ) );
+                } );
         };
     } );
