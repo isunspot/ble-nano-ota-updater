@@ -1,6 +1,6 @@
 'use strict';
 
-describe('module: main, controller: DebugCtrl', function() {
+describe( 'module: main, controller: DebugCtrl', function() {
 
     // load the controller's module
     beforeEach( module( 'main' ) );

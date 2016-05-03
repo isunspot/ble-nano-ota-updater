@@ -1,13 +1,13 @@
 'use strict';
 
 angular
-    .module('main', [
+    .module( 'main', [
         'ionic',
         'ngCordova',
         'ngCordovaBluetoothLE',
         'ui.router'
     ] )
-    .config(function($stateProvider, $urlRouterProvider) {
+    .config( function( $stateProvider, $urlRouterProvider ) {
 
         // ROUTING with ui.router
         $urlRouterProvider.otherwise( '/main/ota' );

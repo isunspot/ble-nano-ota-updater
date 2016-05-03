@@ -1,8 +1,8 @@
 'use strict';
 
 angular
-    .module('main')
-    .controller('OtaCtrl', function($cordovaBluetoothLE, $stateParams, $log) {
+    .module( 'main' )
+    .controller( 'OtaCtrl', function( $cordovaBluetoothLE, $stateParams, $log ) {
 
         var vm = this;
         // vm.devices = {};
@@ -14,19 +14,37 @@ angular
             }
         };
 
+        function addDevice( obj ) {
+
+            if( obj.status === 'scanStarted' ) {
+                return;
+            }
+
+            /*
+             if( vm.devices[obj.address] !== undefined ) {
+             return;
+             }
+             */
+
+            obj.services = {};
+            vm.devices[ obj.address ] = obj;
+
+            $log.log( vm.devices );
+        }
+
         vm.initialize = function() {
 
             var params = {
                 request: true
             };
 
-            $log.log('Initialize : ' + JSON.stringify(params));
+            $log.log( 'Initialize : ' + JSON.stringify( params ) );
 
-            $cordovaBluetoothLE.initialize(params).then(null, function(obj) {
-                $log.log('Initialize Error : ' + JSON.stringify(obj)); //Should only happen when testing in browser
-            }, function(obj) {
-                $log.log('Initialize Success : ' + JSON.stringify(obj));
-            });
+            $cordovaBluetoothLE.initialize( params ).then( null, function( obj ) {
+                $log.log( 'Initialize Error : ' + JSON.stringify( obj ) ); // Should only happen when testing in browser
+            }, function( obj ) {
+                $log.log( 'Initialize Success : ' + JSON.stringify( obj ) );
+            } );
         };
 
         vm.startScan = function() {
@@ -35,8 +53,8 @@ angular
 
             var params = {
                 services: [],
-                allowDuplicates: false //,
-                //scanTimeout: 15000,
+                allowDuplicates: false // ,
+                // scanTimeout: 15000,
             };
 
             if( window.cordova ) {
@@ -46,46 +64,28 @@ angular
                 // params.callbackType = window.bluetoothle.CALLBACK_TYPE_FIRST_MATCH;
             }
 
-            $log.log('Start Scan : ' + JSON.stringify(params));
+            $log.log( 'Start Scan : ' + JSON.stringify( params ) );
 
-            $cordovaBluetoothLE.startScan(params).then(function(obj) {
-                $log.log('Start Scan Auto Stop : ' + JSON.stringify(obj));
-            }, function(obj) {
-                $log.log('Start Scan Error : ' + JSON.stringify(obj));
-            }, function(obj) {
-                $log.log('Start Scan Success : ' + JSON.stringify(obj));
+            $cordovaBluetoothLE.startScan( params ).then( function( obj ) {
+                $log.log( 'Start Scan Auto Stop : ' + JSON.stringify( obj ) );
+            }, function( obj ) {
+                $log.log( 'Start Scan Error : ' + JSON.stringify( obj ) );
+            }, function( obj ) {
+                $log.log( 'Start Scan Success : ' + JSON.stringify( obj ) );
 
-                addDevice(obj);
-            });
+                addDevice( obj );
+            } );
         };
 
         vm.stopScan = function() {
-            $log.log('Stop Scan');
+            $log.log( 'Stop Scan' );
 
-            $cordovaBluetoothLE.stopScan().then(function(obj) {
-                $log.log('Stop Scan Success : ' + JSON.stringify(obj));
-            }, function(obj) {
-                $log.log('Stop Scan Error : ' + JSON.stringify(obj));
-            });
+            $cordovaBluetoothLE.stopScan().then( function( obj ) {
+                $log.log( 'Stop Scan Success : ' + JSON.stringify( obj ) );
+            }, function( obj ) {
+                $log.log( 'Stop Scan Error : ' + JSON.stringify( obj ) );
+            } );
         };
 
-        function addDevice(obj) {
-
-            if( obj.status === 'scanStarted' ) {
-                return;
-            }
-
-            /*
-            if( vm.devices[obj.address] !== undefined ) {
-                return;
-            }
-            */
-
-            obj.services = {};
-            vm.devices[obj.address] = obj;
-
-            $log.log(vm.devices);
-        }
-
         vm.initialize();
-    });
+    } );

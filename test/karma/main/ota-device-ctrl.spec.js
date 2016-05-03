@@ -1,6 +1,6 @@
 'use strict';
 
-describe('module: main, controller: OtaDeviceCtrl', function() {
+describe( 'module: main, controller: OtaDeviceCtrl', function() {
 
     // load the controller's module
     beforeEach( module( 'main' ) );
@@ -14,7 +14,7 @@ describe('module: main, controller: OtaDeviceCtrl', function() {
     } ) );
 
     it( 'should do something', function() {
-        expect( !!OtaDeviceCtrl ).toBe( true );
+        expect( !!OtaDeviceCtrl ).toBe( true ); // eslint-disable-line no-implicit-coercion
     } );
 
 } );
