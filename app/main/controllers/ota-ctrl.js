@@ -32,7 +32,7 @@ angular
             $log.log( vm.devices );
         }
 
-        vm.initialize = function() {
+        function initialize() {
 
             var params = {
                 request: true
@@ -45,7 +45,7 @@ angular
             }, function( obj ) {
                 $log.log( 'Initialize Success : ' + JSON.stringify( obj ) );
             } );
-        };
+        }
 
         vm.startScan = function() {
 
@@ -87,5 +87,5 @@ angular
             } );
         };
 
-        vm.initialize();
+        document.addEventListener( 'deviceready', initialize, false );
     } );
