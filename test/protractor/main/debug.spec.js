@@ -1,6 +1,6 @@
 'use strict';
 
-describe('Debug page', function() {
+describe( 'Debug page', function() {
 
     beforeEach( function() {
         browser.get( '/#/main/debug' );

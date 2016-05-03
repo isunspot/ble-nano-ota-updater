@@ -1,6 +1,6 @@
 'use strict';
 
-describe('module: main, controller: MenuCtrl', function() {
+describe( 'module: main, controller: MenuCtrl', function() {
 
     // load the controller's module
     beforeEach( module( 'main' ) );
@@ -14,7 +14,7 @@ describe('module: main, controller: MenuCtrl', function() {
     } ) );
 
     it( 'should do something', function() {
-        expect( !!MenuCtrl ).toBe( true );
+        expect( !!MenuCtrl ).toBe( true ); // eslint-disable-line no-implicit-coercion
     } );
 
 } );

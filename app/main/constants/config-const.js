@@ -1,9 +1,9 @@
 'use strict';
 
-/* eslint-disable indent */
+/* eslint-disable indent,spaced-comment */
 angular
-    .module('main')
-    .constant('Config', {
+    .module( 'main' )
+    .constant( 'Config', {
 
         // gulp environment: injects environment vars
         ENV: {
