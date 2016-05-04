@@ -3,8 +3,13 @@
   <ion-content class="padding">
 
     <!-- content goes here -->
+    <label class="item item-input">
+      <span class="input-label">Firmware URL</span>
+      <input type="url" ng-model="vm.firmwareUrl">
+    </label>
+
     <div>
-      <button type="input" class="button button-block button-positive" ng-click="vm.selectFirmwareFile()">Select Firmware</button>
+      <button class="button button-block button-positive" ng-click="vm.selectFirmwareFile()">Select Firmware</button>
       <div class="card">
         <div class="item item-text-wrap text-center">
           {{vm.firmwareFileBuf ? 'Firmware file size: ' + vm.firmwareFileBuf.length : 'Choose firmware file'}}
@@ -13,7 +18,7 @@
     </div>
 
     <div>
-      <button type="input" class="button button-block button-positive" ng-click="vm.uploadFirmware()" ng-disabled="!vm.firmwareFileBuf">Update</button>
+      <button class="button button-block button-positive" ng-click="vm.performUpdate()" ng-disabled="!vm.firmwareUrl">Update</button>
       <div class="card">
         <div class="item item-text-wrap text-center">
           {{vm.stateMessage}}

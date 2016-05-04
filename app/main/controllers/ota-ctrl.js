@@ -5,6 +5,7 @@ angular
     .controller( 'OtaCtrl', function( $cordovaBluetoothLE, $stateParams, $log ) {
 
         var vm = this;
+        vm.isScanning = false;
         // vm.devices = {};
 
         vm.devices = {
@@ -47,44 +48,58 @@ angular
             } );
         }
 
-        vm.startScan = function() {
+        function startScan() {
 
             vm.devices = {};
 
             var params = {
                 services: [],
-                allowDuplicates: false // ,
-                // scanTimeout: 15000,
+                allowDuplicates: false,
+                scanTimeout: 10000
             };
 
+            /* These flags are supported from Android API21/23 only
             if( window.cordova ) {
                 params.scanMode = window.bluetoothle.SCAN_MODE_LOW_POWER;
                 params.matchMode = window.bluetoothle.MATCH_MODE_STICKY;
                 params.matchNum = window.bluetoothle.MATCH_NUM_ONE_ADVERTISEMENT;
                 // params.callbackType = window.bluetoothle.CALLBACK_TYPE_FIRST_MATCH;
             }
+            */
 
             $log.log( 'Start Scan : ' + JSON.stringify( params ) );
 
             $cordovaBluetoothLE.startScan( params ).then( function( obj ) {
-                $log.log( 'Start Scan Auto Stop : ' + JSON.stringify( obj ) );
+                $log.log( 'Start scan Auto Stop : ' + JSON.stringify( obj ) );
             }, function( obj ) {
-                $log.log( 'Start Scan Error : ' + JSON.stringify( obj ) );
+                $log.error( 'Start scan Error : ' + JSON.stringify( obj ) );
             }, function( obj ) {
-                $log.log( 'Start Scan Success : ' + JSON.stringify( obj ) );
+                $log.log( 'Start scan Success : ' + JSON.stringify( obj ) );
 
                 addDevice( obj );
             } );
-        };
+        }
 
-        vm.stopScan = function() {
-            $log.log( 'Stop Scan' );
+        function stopScan() {
+            $log.log( 'Stop scan' );
 
             $cordovaBluetoothLE.stopScan().then( function( obj ) {
-                $log.log( 'Stop Scan Success : ' + JSON.stringify( obj ) );
+                $log.log( 'Stop scan Success : ' + JSON.stringify( obj ) );
             }, function( obj ) {
-                $log.log( 'Stop Scan Error : ' + JSON.stringify( obj ) );
+                $log.error( 'Stop scan Error : ' + JSON.stringify( obj ) );
             } );
+        }
+
+        vm.startStopScanning = function() {
+
+            if( vm.isScanning ) {
+                stopScan();
+            } else {
+                vm.devices = {};
+                startScan();
+            }
+
+            vm.isScanning = !vm.isScanning;
         };
 
         document.addEventListener( 'deviceready', initialize, false );

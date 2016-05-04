@@ -1,10 +1,13 @@
 <ion-view view-title="OTA">
+
+  <ion-nav-buttons side="right">
+    <button class="button button-clear button-positive" ng-click="vm.startStopScanning()">{{vm.isScanning ? 'STOP' : 'START'}}</button>
+  </ion-nav-buttons>
+
   <!-- do you want padding? -->
   <ion-content class="padding">
 
     <!-- content goes here -->
-    <button type="input" class="button button-positive" ng-click="vm.startScan()">Scan</button>
-    <button type="input" class="button button-positive" ng-click="vm.stopScan()">Stop</button>
     <ion-list>
       <ion-item
           ng-repeat="device in vm.devices track by device.address"
@@ -19,4 +22,5 @@
     </ion-list>
 
   </ion-content>
+
 </ion-view>
