@@ -2,7 +2,7 @@
 
 angular
     .module( 'main' )
-    .controller( 'OtaDeviceCtrl', function( $cordovaBluetoothLE, $log, $scope, $stateParams, $timeout ) {
+    .controller( 'OtaDeviceCtrl', function( $cordovaBluetoothLE, $cordovaFileTransfer, $log, $scope, $stateParams, $timeout ) {
 
         var vm = this;
 
@@ -12,8 +12,13 @@ angular
         vm.connected = false;
         vm.stateMessage = 'Press Update Button';
 
-        // var firmwareFileUri = 'content://com.android.providers.downloads.documents/document/16535';
-        vm.firmwareFileBuf = null;
+        vm.firmwareUrl = 'https://s3.amazonaws.com/firmware.iot.cantireinnovations.com/smart-puck/00039-45e9cedb82d0ceaed87d2885f8ab97f9c1cb616f/smart-puck.ota.hex';
+
+        function updateStateMessage( message ) {
+            $timeout( function() {
+                vm.stateMessage = message;
+            } );
+        }
 
         function chooseLocalFile() {
 
@@ -31,45 +36,52 @@ angular
             } );
         }
 
-        function readFirmwareFile( firmwareFileUri ) {
+        function downloadFirmwareFile( url ) {
+
+            return new Promise(
+                function( resolve ) {
+
+                    window.requestFileSystem( window.TEMPORARY, 1024 * 1024, function( fs ) {
+                        fs.root.getFile( 'tmp-firmware.hex', { create: true, exclusive: false }, resolve );
+                    } );
+                } )
+                .then( function( fileEntry ) {
+
+                    return $cordovaFileTransfer.download( url, fileEntry.toURL(), {}, true )
+                        .then( function() {
+                            return fileEntry;
+                        },
+                        function( err ) {
+                            return Promise.reject( err );
+                        },
+                        function( progress ) {
+                            var progressPercent = Math.floor( ( progress.loaded / progress.total ) * 100 );
+                            updateStateMessage( 'Download progress: ' + progressPercent + '%' );
+                        } );
+                } );
+        }
+
+        function readFirmwareFile( firmwareFileEntry ) {
 
             return new Promise( function( resolve, reject ) {
 
-                window.FilePath.resolveNativePath( firmwareFileUri,
-                    function( filePath ) {
+                firmwareFileEntry.file(
+                    function( file ) {
 
-                        window.resolveLocalFileSystemURL( filePath,
-                            function( fileEntry ) {
+                        var reader = new FileReader();
 
-                                fileEntry.file(
-                                    function( file ) {
+                        reader.onloadend = function( evt ) {
+                            resolve( new Uint8Array( evt.target.result ) );
+                        };
 
-                                        var reader = new FileReader();
-
-                                        reader.onloadend = function( evt ) {
-                                            resolve( new Uint8Array( evt.target.result ) );
-                                        };
-
-                                        reader.readAsArrayBuffer( file );
-                                    },
-                                    reject
-                                );
-                            },
-                            reject
-                        );
+                        reader.readAsArrayBuffer( file );
                     },
                     reject
                 );
             } );
         }
 
-        function updateStateMessage( message ) {
-            $timeout( function() {
-                vm.stateMessage = message;
-            } );
-        }
-
-        vm.uploadFirmware = function() {
+        function updateFirmware( firmwareFileBuf ) {
 
             var updater = new BLENanoOTAUpdater( vm.device, { logLevel: BLENanoOTAUpdater.LOG_LEVEL_DEBUG } );
 
@@ -130,11 +142,10 @@ angular
                 } )
                 .on( BLENanoOTAUpdater.EVENT_ERROR, function( err ) {
                     $log.error( 'Failed to upload firmware: ' + JSON.stringify( err ) );
-                    updateStateMessage( 'Sorry, error occurred' );
                 } );
 
-            updater.uploadFirmware( vm.firmwareFileBuf );
-        };
+            return updater.uploadFirmware( firmwareFileBuf );
+        }
 
         vm.selectFirmwareFile = function() {
 
@@ -150,6 +161,18 @@ angular
                 } )
                 .catch( function( err ) {
                     $log.error( 'Failed to load firmware file: ' + JSON.stringify( err ) );
+                } );
+        };
+
+        vm.performUpdate = function() {
+
+            updateStateMessage( 'Downloading firmware file' );
+            downloadFirmwareFile( vm.firmwareUrl )
+                .then( readFirmwareFile )
+                .then( updateFirmware )
+                .catch( function( err ) {
+                    $log.error( 'Update failed: ' + err );
+                    updateStateMessage( 'Sorry, error occurred' );
                 } );
         };
     } );
