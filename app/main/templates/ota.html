@@ -1,7 +1,7 @@
 <ion-view view-title="OTA">
 
   <ion-nav-buttons side="right">
-    <button class="button button-clear button-positive" ng-click="vm.startStopScanning()">{{vm.isScanning ? 'STOP' : 'START'}}</button>
+    <button class="button button-clear button-positive" ng-click="vm.startStopScanning()">{{vm.isScanning ? 'STOP' : 'SCAN'}}</button>
   </ion-nav-buttons>
 
   <!-- do you want padding? -->
@@ -14,7 +14,7 @@
           class="item-remove-animate item-icon-right"
           type="item-text-wrap"
           ui-sref="main.otaDevice({ device: device })">
-        <h2>{{device.name}}</h2>
+        <h2>{{device.name ? device.name : 'N/A'}}</h2>
         <p>{{device.address}}</p>
         <p>{{device.rssi}}</p>
         <i class="icon ion-chevron-right icon-accessory"></i>
