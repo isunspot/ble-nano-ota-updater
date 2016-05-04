@@ -15,17 +15,32 @@ angular
             }
         };
 
+        // This algorithm is not perfect and is based on experimental data
+        function resolveDeviceName( device ) {
+
+            if( device.name === null ) {
+                return;
+            }
+
+            var advertisementStr = $cordovaBluetoothLE.bytesToString( $cordovaBluetoothLE.encodedStringToBytes( device.advertisement ) );
+            var advertisementArr = advertisementStr.split( '\t' );
+
+            var name = advertisementArr.pop();
+            $log.log( name );
+
+            var match = name.match( /([-_a-zA-Z0-9 ])+/ );
+            if( match ) {
+                device.name = match[ 0 ];
+            }
+        }
+
         function addDevice( obj ) {
 
             if( obj.status === 'scanStarted' ) {
                 return;
             }
 
-            /*
-             if( vm.devices[obj.address] !== undefined ) {
-             return;
-             }
-             */
+            resolveDeviceName( obj );
 
             obj.services = {};
             vm.devices[ obj.address ] = obj;
@@ -71,6 +86,7 @@ angular
 
             $cordovaBluetoothLE.startScan( params ).then( function( obj ) {
                 $log.log( 'Start scan Auto Stop : ' + JSON.stringify( obj ) );
+                vm.isScanning = !vm.isScanning;
             }, function( obj ) {
                 $log.error( 'Start scan Error : ' + JSON.stringify( obj ) );
             }, function( obj ) {

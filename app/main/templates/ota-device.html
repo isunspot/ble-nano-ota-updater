@@ -1,4 +1,4 @@
-<ion-view view-title="{{vm.device.name}}">
+<ion-view view-title="{{vm.device.name ? vm.device.name : 'N/A'}}">
   <!-- do you want padding? -->
   <ion-content class="padding">
 
@@ -9,19 +9,10 @@
     </label>
 
     <div>
-      <button class="button button-block button-positive" ng-click="vm.selectFirmwareFile()">Select Firmware</button>
-      <div class="card">
-        <div class="item item-text-wrap text-center">
-          {{vm.firmwareFileBuf ? 'Firmware file size: ' + vm.firmwareFileBuf.length : 'Choose firmware file'}}
-        </div>
-      </div>
-    </div>
-
-    <div>
       <button class="button button-block button-positive" ng-click="vm.performUpdate()" ng-disabled="!vm.firmwareUrl">Update</button>
       <div class="card">
         <div class="item item-text-wrap text-center">
-          {{vm.stateMessage}}
+          {{vm.firmwareUrl ? vm.stateMessage : 'Enter firmware file URL'}}
         </div>
       </div>
     </div>
