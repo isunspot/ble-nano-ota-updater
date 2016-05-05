@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.cantireinovations.nano.ota" version="0.0.1" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
-    <name>Nano OTA</name>
+<widget id="com.cantireinovations.nano.ota" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>BLE Nano OTA Updater</name>
     <description>
-        A sample Apache Cordova application that responds to the deviceready event.
+        A sample Apache Cordova application that performs RedBear BLE Nano OTA update using ble-nano-ota-updater plugin.
     </description>
-    <author email="dev@cordova.apache.org" href="http://cordova.io">
-        Apache Cordova Team
+    <author>
+        Canadian Tire Innovations
     </author>
     <content src="index.html" />
     <plugin name="cordova-plugin-whitelist" spec="1" />
@@ -27,4 +27,5 @@
     <plugin name="cordova-plugin-device" spec="~1.1.2" />
     <plugin name="cordova-plugin-bluetoothle" spec="~4.0.0" />
     <preference name="AndroidPersistentFileLocation" value="Compatibility" />
+    <icon src="res/icon.png" />
 </widget>
