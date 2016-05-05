@@ -4,12 +4,14 @@ machine:
 
 dependencies:
     cache_directories:
-        - bower_components
+        - app/bower_components
         - node_modules
+        - plugins
     override:
         - npm prune
         - npm install
 
+        - npm install -g bower
         - bower prune
         - bower install
 
