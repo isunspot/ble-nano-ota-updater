@@ -1,0 +1,20 @@
+machine:
+    node:
+        version: 4.2.4
+
+dependencies:
+    cache_directories:
+        - bower_components
+        - node_modules
+    override:
+        - npm prune
+        - npm install
+
+        - bower prune
+        - bower install
+
+        - gulp --cordova "prepare"
+
+test:
+    override:
+        - gulp eslint
