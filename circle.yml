@@ -24,8 +24,8 @@ test:
         - gulp eslint
 
 deployment:
-    master:
-        branch: master
+    build:
+        owner: CanTireInnovations
         commands:
             - circle/build-app-apk.sh
             - cp platforms/android/build/outputs/apk/android-debug.apk $CIRCLE_ARTIFACTS/ble-nano-ota-updater-$CIRCLE_SHA1-debug.apk

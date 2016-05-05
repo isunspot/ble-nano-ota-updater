@@ -12,8 +12,7 @@ angular
         vm.stateMessage = 'Press Update Button';
         vm.isUpdating = false;
 
-        vm.firmwareUrl = 'https://s3.amazonaws.com/firmware.iot.cantireinnovations.com/smart-puck/00039-45e9cedb82d0ceaed87d2885f8ab97f9c1cb616f/smart-puck.ota.hex';
-        // vm.firmwareUrl = '';
+        vm.firmwareUrl = '';
 
         function updateStateMessage( message ) {
             $timeout( function() {
