@@ -1,6 +1,9 @@
 machine:
     node:
         version: 4.2.4
+    post:
+        - npm install -g bower
+        - npm install -g gulp
 
 dependencies:
     cache_directories:
@@ -11,7 +14,6 @@ dependencies:
         - npm prune
         - npm install
 
-        - npm install -g bower
         - bower prune
         - bower install
 
