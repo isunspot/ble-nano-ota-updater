@@ -1,5 +1,7 @@
 {
-  "private": true,
+  "private": false,
+  "author": "CTI",
+  "license": "MIT",
   "engines": {
     "node": ">=0.12.0"
   },

@@ -26,6 +26,9 @@
     <engine name="android" spec="~5.1.1" />
     <plugin name="cordova-plugin-device" spec="~1.1.2" />
     <plugin name="cordova-plugin-bluetoothle" spec="~4.0.0" />
+    <plugin name="cordova-plugin-file" spec="~4.2.0" />
+    <plugin name="cordova-plugin-file-transfer" spec="~1.5.1" />
+    <plugin name="cordova-plugin-ble-nano-ota-updater" spec="~1.0.0" />
     <preference name="AndroidPersistentFileLocation" value="Compatibility" />
     <icon src="res/icon.png" />
 </widget>

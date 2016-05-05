@@ -18,6 +18,6 @@
     "angular-sanitize": "~1.5.0",
     "angular-ui-router": "~0.2.15"
   },
-  "name": "Nano OTA",
-  "private": true
+  "name": "BLE Nano OTA Updater",
+  "private": false
 }
