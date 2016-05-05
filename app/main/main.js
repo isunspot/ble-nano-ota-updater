@@ -18,12 +18,12 @@ angular
                 templateUrl: 'main/templates/menu.html',
                 controller: 'MenuCtrl as menu'
             } )
-            .state( 'main.ota', {
+            .state( 'main.otaList', {
                 url: '/ota',
                 views: {
                     'pageContent': {
-                        templateUrl: 'main/templates/ota.html',
-                        controller: 'OtaCtrl as vm'
+                        templateUrl: 'main/templates/ota-list.html',
+                        controller: 'OtaListCtrl as vm'
                     }
                 }
             } )

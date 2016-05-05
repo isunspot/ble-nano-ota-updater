@@ -9,14 +9,21 @@ angular
         var BLENanoOTAUpdater = window.BLENanoOTAUpdater;
 
         vm.device = $stateParams.device;
-        vm.connected = false;
         vm.stateMessage = 'Press Update Button';
+        vm.isUpdating = false;
 
         vm.firmwareUrl = 'https://s3.amazonaws.com/firmware.iot.cantireinnovations.com/smart-puck/00039-45e9cedb82d0ceaed87d2885f8ab97f9c1cb616f/smart-puck.ota.hex';
+        // vm.firmwareUrl = '';
 
         function updateStateMessage( message ) {
             $timeout( function() {
                 vm.stateMessage = message;
+            } );
+        }
+
+        function setIsUpdating( isUpdating ) {
+            $timeout( function() {
+                vm.isUpdating = isUpdating;
             } );
         }
 
@@ -166,13 +173,19 @@ angular
 
         vm.performUpdate = function() {
 
+            setIsUpdating( true );
+
             updateStateMessage( 'Downloading firmware file' );
             downloadFirmwareFile( vm.firmwareUrl )
                 .then( readFirmwareFile )
                 .then( updateFirmware )
+                .then( function() {
+                    setIsUpdating( false );
+                } )
                 .catch( function( err ) {
                     $log.error( 'Update failed: ' + err );
                     updateStateMessage( 'Sorry, error occurred' );
+                    setIsUpdating( false );
                 } );
         };
     } );
