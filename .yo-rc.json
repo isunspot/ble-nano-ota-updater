@@ -1,7 +1,7 @@
 {
   "generator-m-ionic": {
     "answers": {
-      "appName": "Nano OTA",
+      "appName": "BLE Nano OTA Updater",
       "appId": "com.cantireinovations.nano.ota",
       "ionicCss": true,
       "bowerPackages": [

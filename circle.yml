@@ -1,11 +1,15 @@
 machine:
     node:
         version: 4.2.4
+    post:
+        - npm install -g bower
+        - npm install -g gulp
 
 dependencies:
     cache_directories:
-        - bower_components
+        - app/bower_components
         - node_modules
+        - plugins
     override:
         - npm prune
         - npm install
@@ -18,3 +22,10 @@ dependencies:
 test:
     override:
         - gulp eslint
+
+deployment:
+    master:
+        branch: master
+        commands:
+            - circle/build-app-apk.sh
+            - cp platforms/android/build/outputs/apk/android-debug.apk $CIRCLE_ARTIFACTS/ble-nano-ota-updater-$CIRCLE_SHA1-debug.apk

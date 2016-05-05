@@ -1,6 +1,9 @@
 {
   "private": false,
-  "author": "CTI",
+  "author": {
+    "name": "Canadian Tire Innovations",
+    "url": "https://github.com/CanTireInnovations"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=0.12.0"
