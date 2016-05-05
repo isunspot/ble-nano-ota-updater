@@ -51,24 +51,15 @@ angular
                 scanTimeout: 10000
             };
 
-            /* These flags are supported from Android API21/23 only
-             if( window.cordova ) {
-             params.scanMode = window.bluetoothle.SCAN_MODE_LOW_POWER;
-             params.matchMode = window.bluetoothle.MATCH_MODE_STICKY;
-             params.matchNum = window.bluetoothle.MATCH_NUM_ONE_ADVERTISEMENT;
-             // params.callbackType = window.bluetoothle.CALLBACK_TYPE_FIRST_MATCH;
-             }
-             */
-
-            $log.log( 'Start Scan : ' + JSON.stringify( params ) );
+            $log.debug( 'Start scan : ' + JSON.stringify( params ) );
 
             $cordovaBluetoothLE.startScan( params ).then( function( obj ) {
-                $log.log( 'Start scan Auto Stop : ' + JSON.stringify( obj ) );
+                $log.debug( 'Start scan auto stop : ' + JSON.stringify( obj ) );
                 vm.isScanning = !vm.isScanning;
             }, function( obj ) {
-                $log.error( 'Start scan Error : ' + JSON.stringify( obj ) );
+                $log.error( 'Start scan error : ' + JSON.stringify( obj ) );
             }, function( obj ) {
-                $log.log( 'Start scan Success : ' + JSON.stringify( obj ) );
+                $log.debug( 'Start scan success : ' + JSON.stringify( obj ) );
 
                 addDevice( obj );
             } );
@@ -79,10 +70,14 @@ angular
             vm.isScanning = false;
 
             $cordovaBluetoothLE.stopScan().then( function( obj ) {
-                $log.log( 'Stop scan Success : ' + JSON.stringify( obj ) );
+                $log.debug( 'Stop scan success : ' + JSON.stringify( obj ) );
             }, function( obj ) {
-                $log.error( 'Stop scan Error : ' + JSON.stringify( obj ) );
+                $log.error( 'Stop scan error : ' + JSON.stringify( obj ) );
             } );
+        }
+
+        function isAndroid23OrNewer() {
+            return device.platform === 'Android' && device.version >= '6.0';
         }
 
         function initialize() {
@@ -91,15 +86,56 @@ angular
                 request: true
             };
 
-            $log.log( 'Initialize : ' + JSON.stringify( params ) );
+            $log.debug( 'Initialize : ' + JSON.stringify( params ) );
 
-            $cordovaBluetoothLE.initialize( params ).then( null, function( obj ) {
-                $log.log( 'Initialize Error : ' + JSON.stringify( obj ) ); // Should only happen when testing in browser
-            }, function( obj ) {
-                $log.log( 'Initialize Success : ' + JSON.stringify( obj ) );
+            return $cordovaBluetoothLE.initialize( params )
+                .then(
+                    null,
+                    function( obj ) {
+                        $log.error( 'Initialize error : ' + JSON.stringify( obj ) ); // Should only happen when testing in browser
+                    },
+                    function( obj ) {
+                        $log.debug( 'Initialize success : ' + JSON.stringify( obj ) );
 
-                startScan();
-            } );
+                        if( !isAndroid23OrNewer() ) {
+                            return startScan();
+                        }
+
+                        return $cordovaBluetoothLE.hasPermission()
+                            .then( function( hasPermissionResult ) {
+
+                                if( hasPermissionResult.hasPermission ) {
+                                    return true;
+                                }
+
+                                return $cordovaBluetoothLE.requestPermission()
+                                    .then( function( requestPermissionResult ) {
+                                        return requestPermissionResult.requestPermission;
+                                    } );
+                            } )
+                            .then( function( hasPermission ) {
+
+                                if( !hasPermission ) {
+                                    return Promise.resolve();
+                                }
+
+                                return $cordovaBluetoothLE.isLocationEnabled()
+                                    .then( function( isLocationEnabledResult ) {
+
+                                        if( isLocationEnabledResult.isLocationEnabled ) {
+                                            return Promise.resolve();
+                                        }
+
+                                        return $cordovaBluetoothLE.requestLocation();
+                                    } );
+                            } )
+                            .then( startScan )
+                            .catch( function( err ) {
+                                $log.error( 'Permissions error: ' + JSON.stringify( err ) );
+                                startScan();
+                            } );
+                    }
+                );
         }
 
         vm.startStopScanning = function() {
