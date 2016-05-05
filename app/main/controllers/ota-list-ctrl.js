@@ -2,7 +2,7 @@
 
 angular
     .module( 'main' )
-    .controller( 'OtaCtrl', function( $cordovaBluetoothLE, $stateParams, $log ) {
+    .controller( 'OtaListCtrl', function( $cordovaBluetoothLE, $stateParams, $log ) {
 
         var vm = this;
         vm.isScanning = false;
