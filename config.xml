@@ -30,5 +30,4 @@
     <plugin name="cordova-plugin-file-transfer" spec="~1.5.1" />
     <plugin name="cordova-plugin-ble-nano-ota-updater" spec="~1.0.0" />
     <preference name="AndroidPersistentFileLocation" value="Compatibility" />
-    <icon src="res/icon.png" />
 </widget>
