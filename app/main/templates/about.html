@@ -1,0 +1,24 @@
+<ion-view view-title="About">
+  <!-- do you want padding? -->
+  <ion-content class="padding">
+
+    <!-- content goes here -->
+    <h3 class="text-center">BLE Nano OTA Updater</h3>
+    <p>This project is a sample <a href="https://cordova.apache.org/">Apache Cordova</a> application that performs <a href="http://redbearlab.com/blenano/">RedBear BLE Nano</a> OTA update using <a href="https://github.com/CanTireInnovations/cordova-plugin-ble-nano-ota-updater">ble-nano-ota-updater plugin</a>.</p>
+    <p>This application is licensed under <a href="https://opensource.org/licenses/MIT">The MIT License (MIT)</a> and uses third-party libraries listed below.</p>
+
+    <ion-list class="padding" ng-repeat="licenseType in vm.librariesByLicense track by licenseType.name">
+      <ion-item class="item item-divider">
+        <a ng-href="{{licenseType.url}}">{{licenseType.name}}</a>
+      </ion-item>
+      <ion-item class="item" ng-repeat="library in licenseType.libraries">
+        <a class="title-left" ng-href="{{library.url}}">{{library.name}}</a>
+        <div>{{library.copyright}}</div>
+      </ion-item>
+    </ion-list>
+
+    <h3>Credits</h3>
+    <p>Structure of this project was generated using <a href="https://github.com/mwaylabs/generator-m-ionic">Generator-M-Ionic</a>.</p>
+
+  </ion-content>
+</ion-view>

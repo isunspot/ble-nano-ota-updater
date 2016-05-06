@@ -1,1 +1,15 @@
+@import "app/bower_components/ionic/scss/ionic.scss";
 
+body {
+  font-size: $item-font-size;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.item{
+  overflow: inherit;
+  text-overflow: inherit;
+  white-space: normal;
+}
