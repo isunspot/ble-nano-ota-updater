@@ -25,6 +25,7 @@ test:
 
 deployment:
     build:
+        branch: /.*/
         owner: CanTireInnovations
         commands:
             - circle/build-app-apk.sh
