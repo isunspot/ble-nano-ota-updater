@@ -38,5 +38,14 @@ angular
                 params: {
                     device: null
                 }
+            } )
+            .state( 'main.about', {
+                url: '/about',
+                views: {
+                    'pageContent': {
+                        templateUrl: 'main/templates/about.html',
+                        controller: 'AboutCtrl as vm'
+                    }
+                }
             } );
     } );

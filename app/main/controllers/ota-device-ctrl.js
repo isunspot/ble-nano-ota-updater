@@ -89,7 +89,7 @@ angular
 
         function updateFirmware( firmwareFileBuf ) {
 
-            var updater = new BLENanoOTAUpdater( vm.device, { logLevel: BLENanoOTAUpdater.LOG_LEVEL_DEBUG } );
+            var updater = new BLENanoOTAUpdater( vm.device, { logLevel: BLENanoOTAUpdater.LOG_LEVEL_INFO } );
 
             updater
                 .on( BLENanoOTAUpdater.EVENT_UPLOAD_PROGRESS, function( payload ) {
